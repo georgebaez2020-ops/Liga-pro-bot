@@ -1,5 +1,6 @@
 import os
 import logging
+import asyncio
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
@@ -18,6 +19,7 @@ def main():
     if not TOKEN:
         print("FALTA TELEGRAM_TOKEN en Render")
         return
+    asyncio.set_event_loop(asyncio.new_event_loop())
     app = ApplicationBuilder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("test", test))
