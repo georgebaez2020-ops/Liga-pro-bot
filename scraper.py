@@ -19,7 +19,6 @@ def save_state(s):
     with open(STATE_FILE, "w") as f:
         json.dump(s, f)
 
-# Liga Pro Ecuador - ESPN
 URL = "https://site.api.espn.com/apis/site/v2/sports/soccer/ecu_primera_a/scoreboard"
 
 def main():
@@ -31,7 +30,6 @@ def main():
         comp = ev["competitions"][0]
         home = comp["competitors"][0]
         away = comp["competitors"][1]
-        # ESPN a veces los invierte, aseguramos local/visita
         if home["homeAway"] != "home":
             home, away = away, home
 
@@ -40,16 +38,14 @@ def main():
         away_name = away["team"]["shortDisplayName"]
         home_goals = int(home.get("score", 0))
         away_goals = int(away.get("score", 0))
-        status = comp["status"]["type"]["state"]  # pre, in, post
+        status = comp["status"]["type"]["state"]
         clock = comp["status"].get("displayClock", "")
         detail = comp["status"]["type"].get("detail", "")
 
         key = f"{home_goals}-{away_goals}"
         new_state[match_id] = key
 
-        # Solo avisar si hay partido en vivo y cambió el marcador
         if status == "in" and state.get(match_id) != key:
-            # No avisar del 0-0 inicial
             if not (state.get(match_id) is None and key == "0-0"):
                 send(f"⚽ <b>GOOOL Liga Pro!</b>\n\n{home_name} {home_goals} - {away_goals} {away_name}\n🕐 {clock}' - {detail}")
 
