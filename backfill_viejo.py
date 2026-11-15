@@ -5,53 +5,31 @@ from datetime import datetime
 async def main():
     todos = []
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        page = await browser.new_page(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36")
-        url = "https://www.flashscore.com/table-tennis/czech-republic/czech-liga-pro/results/"
-        print(f"Jalando 12 meses de {url}")
-        await page.goto(url, timeout=60000)
-        await page.wait_for_timeout(8000)
-        # Intentar aceptar cookies si aparece
-        try:
-            await page.get_by_text("Accept").first.click(timeout=3000)
-        except:
-            pass
-        for i in range(20):
-            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-            await page.wait_for_timeout(1500)
-            print(f"Cargando... vuelta {i+1}/20")
-        # Probar varios selectores
-        html = await page.content()
-        print(f"HTML largo: {len(html)} caracteres")
-        # Guardar muestra para debug
-        with open("debug.html","w") as f: f.write(html[:5000])
-        # Selector nuevo de Flashscore 2026
-        elementos = await page.query_selector_all("div[class*='event__match'], div[class*='eventRow'], a[class*='eventRow']")
-        print(f"Intento 1: {len(elementos)}")
-        if len(elementos)==0:
-            elementos = await page.query_selector_all("[id*='g_']")
-            print(f"Intento 2 por ID: {len(elementos)}")
-        for el in elementos:
+        browser = await p.chromium.launch(headless=True, args=['--no-sandbox','--disable-blink-features=AutomationControlled'])
+        page = await browser.new_page(user_agent="Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15")
+        # Intentamos 2 URLs
+        for url in ["https://m.flashscore.com/table-tennis/czech-republic/czech-liga-pro/results/", "https://www.flashscore.com/table-tennis/czech-republic/czech-liga-pro/results/"]:
+            print(f"Probando {url}")
             try:
-                texto = await el.inner_text()
-                if len(texto.strip())>5:
-                    todos.append({"texto": texto.replace("\n", " | "), "fecha_scrape": str(datetime.now()), "fuente": "flashscore_12m"})
-            except:
-                continue
+                await page.goto(url, timeout=60000)
+                await page.wait_for_timeout(8000)
+                titulo = await page.title()
+                print(f"Titulo: {titulo}")
+                html = await page.content()
+                print(f"HTML: {len(html)}")
+                for i in range(10):
+                    await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                    await page.wait_for_timeout(1500)
+                texto_completo = await page.inner_text("body")
+                print(f"Texto pagina: {len(texto_completo)} chars")
+                print("MUESTRA:", texto_completo[:800].replace("\n"," | "))
+                if "Liga Pro" in texto_completo or "Proksa" in texto_completo or len(texto_completo)>5000:
+                    print("¡ESTA URL SIRVIO!")
+                    break
+            except Exception as e:
+                print(f"Fallo {url}: {e}")
         await browser.close()
-    try:
-        with open("liga_pro_db.json") as f: db = json.load(f)
-    except: db = {"jugadores": {}, "partidos": [], "tabla": {}}
-    existentes = set([p["texto"] for p in db["partidos"]])
-    nuevos = 0
-    for p in todos:
-        if p["texto"] not in existentes:
-            db["partidos"].append(p)
-            nuevos += 1
-    with open("liga_pro_db.json", "w") as f: json.dump(db, f, indent=2)
-    print(f"LISTO 12 MESES: {nuevos} partidos guardados. Total: {len(db['partidos'])}")
-    for t in todos[:5]:
-        print("EJEMPLO:", t["texto"][:150])
+    print("FIN PRUEBA - mandale foto a tu asistente")
 
 if __name__ == "__main__":
     asyncio.run(main())
