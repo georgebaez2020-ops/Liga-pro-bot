@@ -2,5 +2,5 @@ services:
     - type: worker
     name: liga-pro-bot
     env: python
-    buildCommand: pip install -r requirements.txt
+    buildCommand: pip install -r requirements.txt && playwright install chromium
     startCommand: python bot_telegram.py
