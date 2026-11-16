@@ -1,8 +1,9 @@
 import os
+import json
 import time
 import logging
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -11,72 +12,162 @@ from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
 # ---------- Configuración (todo viene de Render > Environment) ----------
 TOKEN = os.environ.get("TELEGRAM_TOKEN")
-CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID") or os.environ.get("CHAT_ID")
 ODDSPAPI_KEY = os.environ.get("ODDSPAPI_KEY") or os.environ.get("ODDSPAPI_API_KEY")
 
 BASE_URL = "https://api.oddspapi.io/v4"
-CZECH_LIGA_PRO = 36349            # ID del torneo en OddsPapi
-ZONA = ZoneInfo("America/Bogota")  # hora de Colombia
-MAX_PARTIDOS = 15
+CZECH_LIGA_PRO = 36349              # ID del torneo en OddsPapi
+CASA_REFERENCIA = "pinnacle"        # casa de apuestas usada como referencia
+UMBRAL = 0.65                       # solo pronósticos con 65% o más
+ZONA = ZoneInfo("America/Bogota")   # hora de Colombia
+ARCHIVO_HISTORIAL = "historial.jsonl"
+CACHE_SEGUNDOS = 1800               # guarda el resultado 30 minutos
 
 logging.basicConfig(level=logging.INFO)
-
-# Caché para no gastar consultas de más (guarda el resultado 1 hora)
 _cache = {"hora": 0.0, "texto": ""}
 
 
 def _hora_local(valor):
-    """Convierte la fecha que manda OddsPapi a hora de Colombia."""
     if not valor:
         return "--:--"
     try:
-        if isinstance(valor, (int, float)):
-            dt = datetime.fromtimestamp(valor, tz=timezone.utc)
-        else:
-            dt = datetime.fromisoformat(str(valor).replace("Z", "+00:00"))
+        dt = datetime.fromisoformat(str(valor).replace("Z", "+00:00"))
         return dt.astimezone(ZONA).strftime("%d/%m %H:%M")
     except Exception:
         return "--:--"
 
 
-async def traer_partidos() -> str:
-    """Pide a OddsPapi los partidos de la Liga Pro checa y arma el mensaje."""
-    if time.time() - _cache["hora"] < 3600 and _cache["texto"]:
+def _precio(nodo):
+    """Saca la cuota de un resultado, si está activa."""
+    try:
+        p = nodo["players"]["0"]
+        if p.get("active", True) and p.get("price"):
+            return float(p["price"])
+    except (KeyError, TypeError, ValueError):
+        pass
+    return None
+
+
+def cuotas_ganador(partido):
+    """
+    Busca el mercado de ganador del partido: el que tiene exactamente
+    dos resultados con cuota (uno por jugador). Devuelve
+    (cuota1, cuota2, id_mercado) o None.
+    """
+    casas = partido.get("bookmakerOdds", {})
+    casa = casas.get(CASA_REFERENCIA) or (next(iter(casas.values())) if casas else None)
+    if not casa:
+        return None
+    for id_mercado, mercado in casa.get("markets", {}).items():
+        resultados = mercado.get("outcomes", {})
+        if len(resultados) != 2:
+            continue
+        precios = [_precio(r) for r in resultados.values()]
+        if all(precios):
+            # Un mercado de ganador tiene cuotas que suman ~100% al invertirlas
+            suma = sum(1 / p for p in precios)
+            if 1.0 <= suma <= 1.15:
+                return precios[0], precios[1], id_mercado
+    return None
+
+
+def probabilidades(c1, c2):
+    """Convierte cuotas a probabilidad justa quitando el margen de la casa."""
+    p1, p2 = 1 / c1, 1 / c2
+    total = p1 + p2
+    return p1 / total, p2 / total
+
+
+def guardar_historial(registro):
+    try:
+        with open(ARCHIVO_HISTORIAL, "a", encoding="utf-8") as f:
+            f.write(json.dumps(registro, ensure_ascii=False) + "\n")
+    except Exception as e:
+        logging.error("No pude guardar historial: %s", e)
+
+
+async def traer_pronosticos() -> str:
+    if time.time() - _cache["hora"] < CACHE_SEGUNDOS and _cache["texto"]:
         return _cache["texto"]
 
     if not ODDSPAPI_KEY:
         return "⚠️ Falta ODDSPAPI_KEY en Render (Environment)."
 
-    hoy = datetime.now(timezone.utc).date()
     params = {
         "apiKey": ODDSPAPI_KEY,
-        "tournamentId": CZECH_LIGA_PRO,
-        "from": hoy.isoformat(),
-        "to": (hoy + timedelta(days=1)).isoformat(),
+        "tournamentIds": CZECH_LIGA_PRO,
+        "bookmakers": CASA_REFERENCIA,
     }
-
     try:
-        async with httpx.AsyncClient(timeout=60) as client:
-            r = await client.get(f"{BASE_URL}/fixtures", params=params)
+        async with httpx.AsyncClient(timeout=90) as client:
+            r = await client.get(f"{BASE_URL}/odds-by-tournaments", params=params)
             r.raise_for_status()
-            datos = r.json()
+            partidos = r.json()
     except Exception as e:
         logging.error("Error consultando OddsPapi: %s", e)
         return "⚠️ No pude consultar OddsPapi. Revisa los Logs en Render."
 
-    partidos = [f for f in datos if f.get("hasOdds")]
-    if not partidos:
-        texto = "No encontré partidos con cuotas en la Liga Pro checa por ahora."
+    ahora = datetime.now(timezone.utc)
+    revisados = 0
+    elegidos = []
+    mercado_usado = None
+
+    for p in partidos:
+        # Solo partidos que aún no empiezan
+        try:
+            inicio = datetime.fromisoformat(p["startTime"].replace("Z", "+00:00"))
+            if inicio <= ahora:
+                continue
+        except Exception:
+            continue
+
+        res = cuotas_ganador(p)
+        if not res:
+            continue
+        c1, c2, mercado_usado = res
+        revisados += 1
+        pr1, pr2 = probabilidades(c1, c2)
+
+        # Nombres: si la API no los trae, usa los IDs de los jugadores
+        n1 = p.get("participant1Name") or f"Jugador {p.get('participant1Id')}"
+        n2 = p.get("participant2Name") or f"Jugador {p.get('participant2Id')}"
+
+        if pr1 >= UMBRAL:
+            elegidos.append((inicio, n1, n2, pr1, c1))
+        elif pr2 >= UMBRAL:
+            elegidos.append((inicio, n2, n1, pr2, c2))
+        else:
+            continue
+
+        ganador, rival, prob, cuota = elegidos[-1][1], elegidos[-1][2], elegidos[-1][3], elegidos[-1][4]
+        guardar_historial({
+            "fixtureId": p.get("fixtureId"),
+            "inicio": p["startTime"],
+            "pronostico": ganador,
+            "rival": rival,
+            "probabilidad": round(prob, 4),
+            "cuota": cuota,
+            "resultado": None,  # se llenará en una fase futura
+        })
+
+    elegidos.sort(key=lambda x: x[0])
+
+    if not elegidos:
+        texto = (
+            f"Revisé {revisados} partidos y ninguno llega al {int(UMBRAL*100)}% por ahora."
+        )
     else:
-        lineas = ["🏓 Liga Pro checa, próximos partidos (hora de Colombia):\n"]
-        for f in partidos[:MAX_PARTIDOS]:
-            hora = _hora_local(f.get("startTime") or f.get("startDate"))
-            j1 = f.get("participant1Name", "?")
-            j2 = f.get("participant2Name", "?")
-            lineas.append(f"{hora}  {j1} vs {j2}")
-        lineas.append(f"\nTotal con cuotas: {len(partidos)}")
+        lineas = [f"🏓 Pronósticos del {int(UMBRAL*100)}% o más (hora de Colombia):\n"]
+        for inicio, g, rv, prob, cuota in elegidos:
+            lineas.append(
+                f"{_hora_local(inicio.isoformat())}  {g} vs {rv}\n"
+                f"   Favorito: {g} ({prob*100:.1f}%, cuota {cuota})\n"
+            )
+        lineas.append(f"Partidos revisados: {revisados}")
+        lineas.append(f"(mercado usado: {mercado_usado})")
         texto = "\n".join(lineas)
 
+    # Telegram permite 4096 caracteres por mensaje
+    texto = texto[:4000]
     _cache["hora"] = time.time()
     _cache["texto"] = texto
     return texto
@@ -85,20 +176,17 @@ async def traer_partidos() -> str:
 # ---------- Comandos ----------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "✅ Bot Liga Pro prendido. Escríbeme /test o /partidos"
+        "✅ Bot Liga Pro prendido. Escríbeme /test o /pronosticos"
     )
 
 
 async def test(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "✅ Conexión OK. Ya puedes seguir con el bot completo."
-    )
+    await update.message.reply_text("✅ Conexión OK.")
 
 
-async def partidos(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Consultando partidos...")
-    texto = await traer_partidos()
-    await update.message.reply_text(texto)
+async def pronosticos(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Calculando probabilidades...")
+    await update.message.reply_text(await traer_pronosticos())
 
 
 def main():
@@ -109,8 +197,7 @@ def main():
     app = ApplicationBuilder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("test", test))
-    app.add_handler(CommandHandler("partidos", partidos))
-
+    app.add_handler(CommandHandler("pronosticos", pronosticos))
     print("Bot iniciado...")
     app.run_polling()
 
