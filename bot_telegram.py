@@ -16,7 +16,7 @@ ODDSPAPI_KEY = os.environ.get("ODDSPAPI_KEY") or os.environ.get("ODDSPAPI_API_KE
 
 BASE_URL = "https://api.oddspapi.io/v4"
 CZECH_LIGA_PRO = 36349          # ID del torneo en OddsPapi
-ZONA = ZoneInfo("Europe/Prague")  # hora local de la liga
+ZONA = ZoneInfo("America/Bogota")  # hora local de la liga
 HORAS_ENTRE_REVISIONES = 6      # 4 consultas al día = unas 120 al mes (límite: 250)
 MAX_PARTIDOS = 15
 
