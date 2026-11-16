@@ -15,19 +15,18 @@ CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID") or os.environ.get("CHAT_ID")
 ODDSPAPI_KEY = os.environ.get("ODDSPAPI_KEY") or os.environ.get("ODDSPAPI_API_KEY")
 
 BASE_URL = "https://api.oddspapi.io/v4"
-CZECH_LIGA_PRO = 36349          # ID del torneo en OddsPapi
-ZONA = ZoneInfo("America/Bogota")  # hora local de la liga
-HORAS_ENTRE_REVISIONES = 6      # 4 consultas al día = unas 120 al mes (límite: 250)
+CZECH_LIGA_PRO = 36349            # ID del torneo en OddsPapi
+ZONA = ZoneInfo("America/Bogota")  # hora de Colombia
 MAX_PARTIDOS = 15
 
 logging.basicConfig(level=logging.INFO)
 
-# Caché para no gastar consultas de más
+# Caché para no gastar consultas de más (guarda el resultado 1 hora)
 _cache = {"hora": 0.0, "texto": ""}
 
 
 def _hora_local(valor):
-    """Convierte la fecha que manda OddsPapi a hora de Praga (HH:MM)."""
+    """Convierte la fecha que manda OddsPapi a hora de Colombia."""
     if not valor:
         return "--:--"
     try:
@@ -42,7 +41,6 @@ def _hora_local(valor):
 
 async def traer_partidos() -> str:
     """Pide a OddsPapi los partidos de la Liga Pro checa y arma el mensaje."""
-    # Si la última consulta fue hace menos de 1 hora, reutiliza el resultado
     if time.time() - _cache["hora"] < 3600 and _cache["texto"]:
         return _cache["texto"]
 
@@ -64,13 +62,13 @@ async def traer_partidos() -> str:
             datos = r.json()
     except Exception as e:
         logging.error("Error consultando OddsPapi: %s", e)
-        return f"⚠️ No pude consultar OddsPapi: {e}"
+        return "⚠️ No pude consultar OddsPapi. Revisa los Logs en Render."
 
     partidos = [f for f in datos if f.get("hasOdds")]
     if not partidos:
         texto = "No encontré partidos con cuotas en la Liga Pro checa por ahora."
     else:
-        lineas = ["🏓 Liga Pro checa, próximos partidos:\n"]
+        lineas = ["🏓 Liga Pro checa, próximos partidos (hora de Colombia):\n"]
         for f in partidos[:MAX_PARTIDOS]:
             hora = _hora_local(f.get("startTime") or f.get("startDate"))
             j1 = f.get("participant1Name", "?")
@@ -103,13 +101,6 @@ async def partidos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(texto)
 
 
-# ---------- Tarea automática ----------
-async def revision_automatica(context: ContextTypes.DEFAULT_TYPE):
-    texto = await traer_partidos()
-    if CHAT_ID:
-        await context.bot.send_message(chat_id=CHAT_ID, text=texto)
-
-
 def main():
     if not TOKEN:
         print("FALTA TELEGRAM_TOKEN en Render")
@@ -119,15 +110,6 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("test", test))
     app.add_handler(CommandHandler("partidos", partidos))
-
-    if app.job_queue is None:
-        print("Falta instalar python-telegram-bot[job-queue] en requirements.txt")
-    else:
-        app.job_queue.run_repeating(
-            revision_automatica,
-            interval=HORAS_ENTRE_REVISIONES * 3600,
-            first=30,
-        )
 
     print("Bot iniciado...")
     app.run_polling()
