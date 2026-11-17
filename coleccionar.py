@@ -1,53 +1,65 @@
 import requests, json, os
 from datetime import datetime, timedelta
 
-# --- CONFIG ---
-# Vamos a coleccionar desde hace 8 meses hasta hoy
-DIAS_ATRAS = 240  # 8 meses
-
-def coleccionar_historicos():
+def coleccionar_ventana(fecha_inicio_str, fecha_fin_str, archivo_salida):
+    """
+    Colecciona solo entre 2 fechas, no los ultimos 240.
+    Ejemplo: coleccionar_ventana("2025-11-18", "2026-03-16", "tablas_tanda2.json")
+    """
+    inicio = datetime.strptime(fecha_inicio_str, "%Y-%m-%d")
+    fin = datetime.strptime(fecha_fin_str, "%Y-%m-%d")
+    
     todos = []
-    hoy = datetime.now()
+    # Si ya hay datos viejos, los cargamos para no borrarlos
+    if os.path.exists("tablas.json"):
+        with open("tablas.json") as f:
+            todos = json.load(f)
     
-    print("Empezando a coleccionar...")
+    # Para no repetir partidos, hacemos una lista de los que ya tenemos
+    ya_tenemos = set(f"{p['fecha']}_{p['jugador1']}_{p['jugador2']}" for p in todos)
     
-    for i in range(DIAS_ATRAS, 0, -1):
-        fecha = hoy - timedelta(days=i)
-        fecha_str = fecha.strftime("%Y-%m-%d")
-        
-        # Aqui conectamos con AiScore
-        # Intentamos traer partidos + cuotas + resultado
+    dia = inicio
+    while dia <= fin:
+        fecha_str = dia.strftime("%Y-%m-%d")
         try:
-            # 1. Partidos de ese dia
             url = f"https://api.aiscore.com/tenis/{fecha_str}"
-            # NOTA: Si AiScore te bloquea, lo cambiamos a otra fuente
             r = requests.get(url, timeout=10)
             datos = r.json()
             
+            nuevos = 0
             for p in datos:
-                registro = {
-                    "fecha": fecha_str,
-                    "jugador1": p.get("jugador1"),
-                    "jugador2": p.get("jugador2"),
-                    "ganador": p.get("ganador"), # Quien gano de verdad
-                    "cuota1": p.get("cuota1"),   # Cuota que habia ese dia
-                    "cuota2": p.get("cuota2"),
-                    "prob_predicha": None, # La llenamos despues
-                    "acertado": None
-                }
-                todos.append(registro)
-            print(f"{fecha_str}: {len(datos)} partidos coleccionados")
-            
+                clave = f"{fecha_str}_{p.get('jugador1')}_{p.get('jugador2')}"
+                if clave not in ya_tenemos:
+                    todos.append({
+                        "fecha": fecha_str,
+                        "jugador1": p.get("jugador1"),
+                        "jugador2": p.get("jugador2"),
+                        "ganador": p.get("ganador"),
+                        "cuota1": p.get("cuota1"),
+                        "cuota2": p.get("cuota2"),
+                    })
+                    ya_tenemos.add(clave)
+                    nuevos += 1
+            print(f"{fecha_str}: {nuevos} nuevos")
         except Exception as e:
-            print(f"{fecha_str}: No pude, sigo con el siguiente - {e}")
-            continue
+            print(f"{fecha_str}: fallo, sigo - {e}")
+        dia += timedelta(days=1)
     
-    # Guardar todo
     with open("tablas.json", "w") as f:
         json.dump(todos, f)
     
-    print(f"LISTO. Coleccionados {len(todos)} partidos en total")
-    return todos
+    print(f"LISTO. Total guardado: {len(todos)} partidos, sin repetidos")
+
+# --- AQUI ELIGES QUE TANDA QUIERES ---
+# Tanda 1 - Ya la estamos haciendo
+# coleccionar_ventana("2026-03-17", "2026-11-17", "tablas.json")
+
+# Tanda 2 - Cuando termines la 1, descomentas esta y corres otra vez
+# coleccionar_ventana("2025-11-18", "2026-03-16", "tablas.json")
+
+# Tanda 3 - Para ir aun mas atras
+# coleccionar_ventana("2025-07-20", "2025-11-17", "tablas.json")
 
 if __name__ == "__main__":
-    coleccionar_historicos()
+    # Por ahora solo corre la Tanda 1
+    coleccionar_ventana("2026-03-17", "2026-11-17", "tablas.json")
