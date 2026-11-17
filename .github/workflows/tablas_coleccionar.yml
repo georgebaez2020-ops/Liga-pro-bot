@@ -14,13 +14,13 @@ jobs:
         with:
           python-version: '3.11'
       - name: Instalar
-      run: pip install -r requirements.txt
+        run: pip install -r requirements.txt
       - name: Instalar navegador Playwright
-      run: playwright install chromium --with-deps
+        run: playwright install chromium --with-deps
       - name: Bajar datos viejos
         run: |
           git fetch origin datos || true
-          git checkout origin/datos -- data/tablas.json || mkdir -p data && echo "[]" > data/tablas.json
+          git checkout origin/datos -- data/tablas.json || mkdir -p data
           ls -lh data/
       - name: Coleccionar 8 meses
         run: python coleccionar.py
