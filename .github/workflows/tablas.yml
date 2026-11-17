@@ -27,7 +27,7 @@ concurrency:
 
 jobs:
   scrape:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -46,10 +46,10 @@ jobs:
           TORNEOS: ${{ inputs.torneos }}
           DIA: ${{ inputs.dia }}
           STATUS: ${{ inputs.status }}
-        run: 
+        run: python tablas_scraper.py
 
       - name: Guardar en la rama datos
-        run: python tablas_scraper.py.
+        run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git fetch origin datos:datos 2>/dev/null || true
