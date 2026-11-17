@@ -1,7 +1,7 @@
 name: Coleccionar Historicos
 
 on:
-  workflow_dispatch:  # Lo prendes tu con un boton
+  workflow_dispatch:
 
 jobs:
   coleccionar:
@@ -9,18 +9,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: datos
+          ref: main
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
       - name: Instalar
         run: pip install requests
+      - name: Bajar datos viejos de datos
+        run: |
+          git fetch origin datos || true
+          git checkout origin/datos -- tablas.json || echo "[] " > tablas.json
       - name: Coleccionar 8 meses
         run: python coleccionar.py
-      - name: Guardar
+      - name: Guardar en datos
         run: |
           git config user.name "bot"
           git config user.email "bot@bot.com"
+          git checkout datos || git checkout -b datos
           git add tablas.json
           git commit -m "historicos coleccionados" || true
-          git push || true
+          git push origin datos || true
