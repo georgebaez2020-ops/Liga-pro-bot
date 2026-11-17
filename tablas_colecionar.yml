@@ -1,1 +1,26 @@
+name: Coleccionar Historicos
 
+on:
+  workflow_dispatch:  # Lo prendes tu con un boton
+
+jobs:
+  coleccionar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: datos
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Instalar
+        run: pip install requests
+      - name: Coleccionar 8 meses
+        run: python coleccionar.py
+      - name: Guardar
+        run: |
+          git config user.name "bot"
+          git config user.email "bot@bot.com"
+          git add tablas.json
+          git commit -m "historicos coleccionados" || true
+          git push || true
