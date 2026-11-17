@@ -1,5 +1,5 @@
 {
- "generado": "2026-11-17T00:42:24-05:00",
+ "generado": "2026-11-17T01:57:00-05:00",
  "dia_colombia": "2026-11-17",
  "torneos": {
   "38130": {
@@ -599,7 +599,71 @@
    ]
   },
   "38152": {
-   "error": "TimeoutError"
+   "url": "https://tt.league-pro.com/en/tournaments/38152",
+   "grupos": [
+    [
+     {
+      "pos": "1",
+      "jugador": "Zika Tadeas",
+      "rating": "1080",
+      "resultados": [
+       "|||",
+       ":",
+       ":",
+       ":"
+      ],
+      "sets": "-",
+      "balls": "-",
+      "points": "",
+      "place": ""
+     },
+     {
+      "pos": "2",
+      "jugador": "Dousek Tomas",
+      "rating": "1055",
+      "resultados": [
+       ":",
+       "|||",
+       ":",
+       ":"
+      ],
+      "sets": "-",
+      "balls": "-",
+      "points": "",
+      "place": ""
+     },
+     {
+      "pos": "3",
+      "jugador": "Pilch Jakub",
+      "rating": "1052",
+      "resultados": [
+       ":",
+       ":",
+       "|||",
+       ":"
+      ],
+      "sets": "-",
+      "balls": "-",
+      "points": "",
+      "place": ""
+     },
+     {
+      "pos": "4",
+      "jugador": "Navedla Matyas",
+      "rating": "1033",
+      "resultados": [
+       ":",
+       ":",
+       ":",
+       "|||"
+      ],
+      "sets": "-",
+      "balls": "-",
+      "points": "",
+      "place": ""
+     }
+    ]
+   ]
   },
   "38154": {
    "url": "https://tt.league-pro.com/en/tournaments/38154",
