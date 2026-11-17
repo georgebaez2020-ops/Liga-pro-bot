@@ -1,206 +1,177 @@
-import os
-import json
-import time
-import logging
 import asyncio
-from datetime import datetime, timezone
+import csv
+import json
+import os
+import re
+from datetime import datetime
 from zoneinfo import ZoneInfo
+from playwright.async_api import async_playwright
 
-import httpx
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+COL = ZoneInfo('America/Bogota')
+PRAGA = ZoneInfo('Europe/Prague')
+BASE = 'https://tt.league-pro.com/en/tournaments'
+SALIDA = 'salida'
+MAX_TORNEOS = 30
 
-# ---------- Configuración (todo viene de Render > Environment) ----------
-TOKEN = os.environ.get("TELEGRAM_TOKEN")
-ODDSPAPI_KEY = os.environ.get("ODDSPAPI_KEY") or os.environ.get("ODDSPAPI_API_KEY")
+JS_FILAS = '''
+() => Array.from(document.querySelectorAll('.c-tournament-group-item')).map(fila =>
+    Array.from(fila.querySelectorAll(':scope > div')).map(celda => {
+        const a = celda.querySelector('a');
+        return (a ? a.innerText : celda.innerText).trim();
+    })
+)
+'''
 
-BASE_URL = "https://api.oddspapi.io/v4"
-CZECH_LIGA_PRO = 36349              # ID del torneo en OddsPapi
-CASA_REFERENCIA = "pinnacle"        # casa de apuestas usada como referencia
-UMBRAL = 0.65                       # solo pronósticos con 65% o más
-ZONA = ZoneInfo("America/Bogota")   # hora de Colombia
-ARCHIVO_HISTORIAL = "historial.jsonl"
-CACHE_SEGUNDOS = 1800               # guarda el resultado 30 minutos
+def url_lista(dia_col, status):
+    y, m, d = (int(x) for x in dia_col.split('-'))
+    ini = datetime(y, m, d, 0, 0, tzinfo=COL).astimezone(PRAGA).date()
+    fin = datetime(y, m, d, 23, 59, tzinfo=COL).astimezone(PRAGA).date()
+    url = f'{BASE}?date_from={ini}&date_to={fin}'
+    if status:
+        url += f'&status={status}'
+    return url
 
-logging.basicConfig(level=logging.INFO)
-_cache = {"hora": 0.0, "texto": ""}
-
-
-def _hora_local(valor):
-    if not valor:
-        return "--:--"
-    try:
-        dt = datetime.fromisoformat(str(valor).replace("Z", "+00:00"))
-        return dt.astimezone(ZONA).strftime("%d/%m %H:%M")
-    except Exception:
-        return "--:--"
-
-
-def _precio(nodo):
-    """Saca la cuota de un resultado, si está activa."""
-    try:
-        p = nodo["players"]["0"]
-        if p.get("active", True) and p.get("price"):
-            return float(p["price"])
-    except (KeyError, TypeError, ValueError):
-        pass
-    return None
-
-
-def cuotas_ganador(partido):
-    """
-    Busca el mercado de ganador del partido: el que tiene exactamente
-    dos resultados con cuota (uno por jugador). Devuelve
-    (cuota1, cuota2, id_mercado) o None.
-    """
-    casas = partido.get("bookmakerOdds", {})
-    casa = casas.get(CASA_REFERENCIA) or (next(iter(casas.values())) if casas else None)
-    if not casa:
-        return None
-    for id_mercado, mercado in casa.get("markets", {}).items():
-        resultados = mercado.get("outcomes", {})
-        if len(resultados) != 2:
+def armar_grupos(filas):
+    grupos, actual, tam = [], [], 0
+    for c in filas:
+        n = len(c) - 7
+        if n < 2:
             continue
-        precios = [_precio(r) for r in resultados.values()]
-        if all(precios):
-            # Un mercado de ganador tiene cuotas que suman ~100% al invertirlas
-            suma = sum(1 / p for p in precios)
-            if 1.0 <= suma <= 1.15:
-                return precios[0], precios[1], id_mercado
-    return None
-
-
-def probabilidades(c1, c2):
-    """Convierte cuotas a probabilidad justa quitando el margen de la casa."""
-    p1, p2 = 1 / c1, 1 / c2
-    total = p1 + p2
-    return p1 / total, p2 / total
-
-
-def guardar_historial(registro):
-    try:
-        with open(ARCHIVO_HISTORIAL, "a", encoding="utf-8") as f:
-            f.write(json.dumps(registro, ensure_ascii=False) + "\n")
-    except Exception as e:
-        logging.error("No pude guardar historial: %s", e)
-
-
-async def traer_pronosticos() -> str:
-    if time.time() - _cache["hora"] < CACHE_SEGUNDOS and _cache["texto"]:
-        return _cache["texto"]
-
-    if not ODDSPAPI_KEY:
-        return "⚠️ Falta ODDSPAPI_KEY en Render (Environment)."
-
-    params = {
-        "apiKey": ODDSPAPI_KEY,
-        "tournamentIds": CZECH_LIGA_PRO,
-        "bookmakers": CASA_REFERENCIA,
-    }
-    try:
-        async with httpx.AsyncClient(timeout=90) as client:
-            r = await client.get(f"{BASE_URL}/odds-by-tournaments", params=params)
-            r.raise_for_status()
-            partidos = r.json()
-    except Exception as e:
-        logging.error("Error consultando OddsPapi: %s", e)
-        return "⚠️ No pude consultar OddsPapi. Revisa los Logs en Render."
-
-    ahora = datetime.now(timezone.utc)
-    revisados = 0
-    elegidos = []
-    mercado_usado = None
-
-    for p in partidos:
-        # Solo partidos que aún no empiezan
-        try:
-            inicio = datetime.fromisoformat(p["startTime"].replace("Z", "+00:00"))
-            if inicio <= ahora:
-                continue
-        except Exception:
-            continue
-
-        res = cuotas_ganador(p)
-        if not res:
-            continue
-        c1, c2, mercado_usado = res
-        revisados += 1
-        pr1, pr2 = probabilidades(c1, c2)
-
-        # Nombres: si la API no los trae, usa los IDs de los jugadores
-        n1 = p.get("participant1Name") or f"Jugador {p.get('participant1Id')}"
-        n2 = p.get("participant2Name") or f"Jugador {p.get('participant2Id')}"
-
-        if pr1 >= UMBRAL:
-            elegidos.append((inicio, n1, n2, pr1, c1))
-        elif pr2 >= UMBRAL:
-            elegidos.append((inicio, n2, n1, pr2, c2))
-        else:
-            continue
-
-        ganador, rival, prob, cuota = elegidos[-1][1], elegidos[-1][2], elegidos[-1][3], elegidos[-1][4]
-        guardar_historial({
-            "fixtureId": p.get("fixtureId"),
-            "inicio": p["startTime"],
-            "pronostico": ganador,
-            "rival": rival,
-            "probabilidad": round(prob, 4),
-            "cuota": cuota,
-            "resultado": None,  # se llenará en una fase futura
+        if not actual:
+            tam = n
+        actual.append({
+            'pos': c[0], 'jugador': c[1], 'rating': c[2],
+            'resultados': c[3:3 + n],
+            'sets': c[3 + n], 'balls': c[4 + n],
+            'points': c[5 + n], 'place': c[6 + n],
         })
+        if len(actual) == tam:
+            grupos.append(actual)
+            actual = []
+    if actual:
+        grupos.append(actual)
+    return grupos
 
-    elegidos.sort(key=lambda x: x[0])
+async def descubrir(page, url):
+    await page.goto(url, wait_until='networkidle')
+    await page.wait_for_timeout(2000)
+    html = await page.content()
+    return sorted(set(re.findall(r'/en/tournaments/([0-9]+)', html)))
 
-    if not elegidos:
-        texto = (
-            f"Revisé {revisados} partidos y ninguno llega al {int(UMBRAL*100)}% por ahora."
-        )
-    else:
-        lineas = [f"🏓 Pronósticos del {int(UMBRAL*100)}% o más (hora de Colombia):\n"]
-        for inicio, g, rv, prob, cuota in elegidos:
-            lineas.append(
-                f"{_hora_local(inicio.isoformat())}  {g} vs {rv}\n"
-                f"   Favorito: {g} ({prob*100:.1f}%, cuota {cuota})\n"
-            )
-        lineas.append(f"Partidos revisados: {revisados}")
-        lineas.append(f"(mercado usado: {mercado_usado})")
-        texto = "\n".join(lineas)
+async def extraer(page, tid):
+    url = f'{BASE}/{tid}'
+    await page.goto(url, wait_until='networkidle')
+    try:
+        await page.wait_for_selector('.c-tournament-group-item', timeout=15000)
+    except Exception:
+        return {'url': url, 'grupos': [], 'aviso': 'tabla no encontrada'}
+    filas = await page.evaluate(JS_FILAS)
+    return {'url': url, 'grupos': armar_grupos(filas)}
 
-    # Telegram permite 4096 caracteres por mensaje
-    texto = texto[:4000]
-    _cache["hora"] = time.time()
-    _cache["texto"] = texto
-    return texto
+# --- NUEVO: CUOTAS DESDE AISCORE ---
+async def cuota_aiscore(page, jugador1, jugador2):
+    q = f"{jugador1} {jugador2}"
+    url = f"https://m.aiscore.com/search?keyword={q.replace(' ', '%20')}"
+    try:
+        await page.goto(url, wait_until='networkidle')
+        await page.wait_for_timeout(2000)
+        html = await page.content()
+        cuotas = re.findall(r'\b(1\.\d{2}|[2-9]\.\d{2})\b', html)[:2]
+        if len(cuotas) >= 2:
+            return float(cuotas[0]), float(cuotas[1])
+    except Exception as e:
+        print(f"Sin cuota AiScore para {jugador1} vs {jugador2}: {e}")
+    return None, None
 
+def prob_por_rating(r1, r2):
+    try:
+        r1 = float(str(r1).replace(',', '.'))
+        r2 = float(str(r2).replace(',', '.'))
+    except:
+        return 0.5
+    return 1 / (1 + 10 ** ((r2 - r1) / 400))
 
-# ---------- Comandos ----------
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "✅ Bot Liga Pro prendido. Escríbeme /test o /pronosticos"
-    )
+async def main():
+    torneos = [t.strip().rstrip('/').split('/')[-1]
+               for t in os.environ.get('TORNEOS', '').split(',') if t.strip()]
+    dia = os.environ.get('DIA') or datetime.now(COL).strftime('%Y-%m-%d')
+    status = os.environ.get('STATUS', '').strip()
 
+    resultado = {'generado': datetime.now(COL).isoformat(timespec='seconds'),
+                 'dia_colombia': dia, 'torneos': {}}
+    recomendados = []
 
-async def test(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("✅ Conexión OK.")
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(
+            headless=True,
+            args=['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'])
+        page = await browser.new_page()
 
+        if not torneos:
+            torneos = await descubrir(page, url_lista(dia, status))
+            print(f'Torneos encontrados: {len(torneos)}')
 
-async def pronosticos(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Calculando probabilidades...")
-    await update.message.reply_text(await traer_pronosticos())
+        for tid in torneos[:MAX_TORNEOS]:
+            try:
+                resultado['torneos'][tid] = await extraer(page, tid)
+            except Exception as e:
+                resultado['torneos'][tid] = {'error': type(e).__name__}
 
+        # --- NUEVO: ANALIZAR SOLO LOS MEJORES ---
+        for tid, t in resultado['torneos'].items():
+            for grupo in t.get('grupos', []):
+                if len(grupo) >= 2:
+                    j1 = grupo[0]
+                    j2 = grupo[1]
+                    c1, c2 = await cuota_aiscore(page, j1['jugador'], j2['jugador'])
+                    if not c1 or not c2:
+                        continue
+                    # Quien tiene mas rating es el favorito
+                    try:
+                        r1 = float(str(j1['rating']).replace(',', '.'))
+                        r2 = float(str(j2['rating']).replace(',', '.'))
+                    except:
+                        continue
+                    if r1 >= r2:
+                        fav, fav_r, otro_r, cuota_fav = j1['jugador'], r1, r2, c1
+                    else:
+                        fav, fav_r, otro_r, cuota_fav = j2['jugador'], r2, r1, c2
+                    p_modelo = prob_por_rating(fav_r, otro_r)
+                    p_cuota = 1 / cuota_fav if cuota_fav else 0
+                    valor = p_modelo - p_cuota
+                    # FILTRO QUE PEDISTE: 70% o mas + valor 5% o mas
+                    if p_modelo >= 0.70 and valor >= 0.05:
+                        recomendados.append({
+                            'partido': f"{j1['jugador']} vs {j2['jugador']}",
+                            'favorito': fav,
+                            'prob_modelo': round(p_modelo*100, 1),
+                            'prob_cuota': round(p_cuota*100, 1),
+                            'cuota': cuota_fav,
+                            'valor': round(valor*100, 1),
+                            'torneo': tid
+                        })
+        await browser.close()
 
-def main():
-    if not TOKEN:
-        print("FALTA TELEGRAM_TOKEN en Render")
-        return
-    asyncio.set_event_loop(asyncio.new_event_loop())
-    app = ApplicationBuilder().token(TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("test", test))
-    app.add_handler(CommandHandler("pronosticos", pronosticos))
-    print("Bot iniciado...")
-    app.run_polling()
+    # Ordenar de mayor a menor probabilidad
+    recomendados = sorted(recomendados, key=lambda x: x['prob_modelo'], reverse=True)[:5]
 
+    os.makedirs(SALIDA, exist_ok=True)
+    with open(f'{SALIDA}/tablas.json', 'w', encoding='utf-8') as f:
+        json.dump(resultado, f, ensure_ascii=False, indent=1)
+    with open(f'{SALIDA}/pronosticos.json', 'w', encoding='utf-8') as f:
+        json.dump({'generado': resultado['generado'], 'recomendados': recomendados}, f, ensure_ascii=False, indent=1)
 
-if __name__ == "__main__":
-    main()
+    with open(f'{SALIDA}/tablas.csv', 'w', newline='', encoding='utf-8') as f:
+        w = csv.writer(f)
+        w.writerow(['torneo', 'grupo', 'pos', 'jugador', 'rating',
+                    'resultados', 'sets', 'balls', 'points', 'place'])
+        for tid, t in resultado['torneos'].items():
+            for i, g in enumerate(t.get('grupos', []), start=1):
+                for j in g:
+                    w.writerow([tid, i, j['pos'], j['jugador'], j['rating'],
+                                '|'.join(j['resultados']), j['sets'],
+                                j['balls'], j['points'], j['place']])
+    print('Listo:', len(resultado['torneos']), 'torneos, Recomendados:', len(recomendados))
+
+if __name__ == '__main__':
+    asyncio.run(main())
