@@ -14,7 +14,9 @@ jobs:
         with:
           python-version: '3.11'
       - name: Instalar
-        run: pip install requests
+      run: pip install -r requirements.txt
+      - name: Instalar navegador Playwright
+      run: playwright install chromium --with-deps
       - name: Bajar datos viejos
         run: |
           git fetch origin datos || true
