@@ -1,6 +1,6 @@
 {
- "generado": "2026-11-16T23:53:13-05:00",
- "dia_colombia": "2026-11-16",
+ "generado": "2026-11-17T00:42:24-05:00",
+ "dia_colombia": "2026-11-17",
  "torneos": {
   "38130": {
    "url": "https://tt.league-pro.com/en/tournaments/38130",
@@ -85,6 +85,585 @@
       "balls": "120-157",
       "points": "5",
       "place": "5"
+     }
+    ]
+   ]
+  },
+  "38135": {
+   "url": "https://tt.league-pro.com/en/tournaments/38135",
+   "grupos": [
+    [
+     {
+      "pos": "1",
+      "jugador": "Kasnik Sebastian",
+      "rating": "871",
+      "resultados": [
+       "|||",
+       "3 : 0",
+       "1 : 3",
+       "3 : 0",
+       "3 : 1"
+      ],
+      "sets": "10-4",
+      "balls": "135-114",
+      "points": "7",
+      "place": "1"
+     },
+     {
+      "pos": "2",
+      "jugador": "Regner Michal",
+      "rating": "872",
+      "resultados": [
+       "0 : 3",
+       "|||",
+       "2 : 3",
+       "3 : 0",
+       "3 : 1"
+      ],
+      "sets": "8-7",
+      "balls": "141-146",
+      "points": "6",
+      "place": "2"
+     },
+     {
+      "pos": "3",
+      "jugador": "Sopko Martin",
+      "rating": "888",
+      "resultados": [
+       "3 : 1",
+       "3 : 2",
+       "|||",
+       "1 : 3",
+       "0 : 3"
+      ],
+      "sets": "7-9",
+      "balls": "140-147",
+      "points": "6",
+      "place": "3"
+     },
+     {
+      "pos": "4",
+      "jugador": "Louda Jiri",
+      "rating": "886",
+      "resultados": [
+       "0 : 3",
+       "0 : 3",
+       "3 : 1",
+       "|||",
+       "3 : 2"
+      ],
+      "sets": "6-9",
+      "balls": "140-153",
+      "points": "6",
+      "place": "4"
+     },
+     {
+      "pos": "5",
+      "jugador": "Tazler Jakub",
+      "rating": "874",
+      "resultados": [
+       "1 : 3",
+       "1 : 3",
+       "3 : 0",
+       "2 : 3",
+       "|||"
+      ],
+      "sets": "7-9",
+      "balls": "151-147",
+      "points": "5",
+      "place": "5"
+     }
+    ]
+   ]
+  },
+  "38138": {
+   "url": "https://tt.league-pro.com/en/tournaments/38138",
+   "grupos": [
+    [
+     {
+      "pos": "1",
+      "jugador": "Fojt Pavel",
+      "rating": "687",
+      "resultados": [
+       "|||",
+       "2 : 3",
+       "3 : 1",
+       "3 : 2",
+       "3 : 0"
+      ],
+      "sets": "11-6",
+      "balls": "175-153",
+      "points": "7",
+      "place": "1"
+     },
+     {
+      "pos": "2",
+      "jugador": "Plachy Jiri",
+      "rating": "692",
+      "resultados": [
+       "3 : 2",
+       "|||",
+       "3 : 1",
+       "1 : 3",
+       "3 : 1"
+      ],
+      "sets": "10-7",
+      "balls": "162-150",
+      "points": "7",
+      "place": "2"
+     },
+     {
+      "pos": "3",
+      "jugador": "Holovatiuk Yurii",
+      "rating": "726",
+      "resultados": [
+       "1 : 3",
+       "1 : 3",
+       "|||",
+       "3 : 2",
+       "3 : 1"
+      ],
+      "sets": "8-9",
+      "balls": "155-154",
+      "points": "6",
+      "place": "3"
+     },
+     {
+      "pos": "4",
+      "jugador": "Parhomenko Dmitro",
+      "rating": "652",
+      "resultados": [
+       "2 : 3",
+       "3 : 1",
+       "2 : 3",
+       "|||",
+       "1 : 3"
+      ],
+      "sets": "8-10",
+      "balls": "166-178",
+      "points": "5",
+      "place": "4"
+     },
+     {
+      "pos": "5",
+      "jugador": "Darin Kyryl",
+      "rating": "681",
+      "resultados": [
+       "0 : 3",
+       "1 : 3",
+       "1 : 3",
+       "3 : 1",
+       "|||"
+      ],
+      "sets": "5-10",
+      "balls": "125-148",
+      "points": "5",
+      "place": "5"
+     }
+    ]
+   ]
+  },
+  "38139": {
+   "url": "https://tt.league-pro.com/en/tournaments/38139",
+   "grupos": [
+    [
+     {
+      "pos": "1",
+      "jugador": "Jira Jiri",
+      "rating": "234",
+      "resultados": [
+       "|||",
+       ":",
+       ":",
+       ":"
+      ],
+      "sets": "-",
+      "balls": "-",
+      "points": "",
+      "place": ""
+     },
+     {
+      "pos": "2",
+      "jugador": "Bunchuzhnyi Artem",
+      "rating": "206",
+      "resultados": [
+       ":",
+       "|||",
+       ":",
+       ":"
+      ],
+      "sets": "-",
+      "balls": "-",
+      "points": "",
+      "place": ""
+     },
+     {
+      "pos": "3",
+      "jugador": "Koch Jiri",
+      "rating": "201",
+      "resultados": [
+       ":",
+       ":",
+       "|||",
+       ":"
+      ],
+      "sets": "-",
+      "balls": "-",
+      "points": "",
+      "place": ""
+     },
+     {
+      "pos": "4",
+      "jugador": "Rychtar Jiri",
+      "rating": "195",
+      "resultados": [
+       ":",
+       ":",
+       ":",
+       "|||"
+      ],
+      "sets": "-",
+      "balls": "-",
+      "points": "",
+      "place": ""
+     }
+    ]
+   ]
+  },
+  "38140": {
+   "url": "https://tt.league-pro.com/en/tournaments/38140",
+   "grupos": [
+    [
+     {
+      "pos": "1",
+      "jugador": "Kulhanek Tomas",
+      "rating": "551",
+      "resultados": [
+       "|||",
+       ":",
+       ":",
+       ":"
+      ],
+      "sets": "-",
+      "balls": "-",
+      "points": "",
+      "place": ""
+     },
+     {
+      "pos": "2",
+      "jugador": "Vilhan Martin",
+      "rating": "482",
+      "resultados": [
+       ":",
+       "|||",
+       ":",
+       ":"
+      ],
+      "sets": "-",
+      "balls": "-",
+      "points": "",
+      "place": ""
+     },
+     {
+      "pos": "3",
+      "jugador": "Syroha Michal",
+      "rating": "473",
+      "resultados": [
+       ":",
+       ":",
+       "|||",
+       ":"
+      ],
+      "sets": "-",
+      "balls": "-",
+      "points": "",
+      "place": ""
+     },
+     {
+      "pos": "4",
+      "jugador": "Vlachy Lubos",
+      "rating": "",
+      "resultados": [
+       ":",
+       ":",
+       ":",
+       "|||"
+      ],
+      "sets": "-",
+      "balls": "-",
+      "points": "",
+      "place": ""
+     }
+    ]
+   ]
+  },
+  "38144": {
+   "url": "https://tt.league-pro.com/en/tournaments/38144",
+   "grupos": [
+    [
+     {
+      "pos": "1",
+      "jugador": "Bartunek Radek",
+      "rating": "620",
+      "resultados": [
+       "|||",
+       ":",
+       ":",
+       ":"
+      ],
+      "sets": "-",
+      "balls": "-",
+      "points": "",
+      "place": ""
+     },
+     {
+      "pos": "2",
+      "jugador": "Smrcek Milan",
+      "rating": "607",
+      "resultados": [
+       ":",
+       "|||",
+       ":",
+       ":"
+      ],
+      "sets": "-",
+      "balls": "-",
+      "points": "",
+      "place": ""
+     },
+     {
+      "pos": "3",
+      "jugador": "Steffan Jan",
+      "rating": "595",
+      "resultados": [
+       ":",
+       ":",
+       "|||",
+       ":"
+      ],
+      "sets": "-",
+      "balls": "-",
+      "points": "",
+      "place": ""
+     },
+     {
+      "pos": "4",
+      "jugador": "Stefek Martin",
+      "rating": "572",
+      "resultados": [
+       ":",
+       ":",
+       ":",
+       "|||"
+      ],
+      "sets": "-",
+      "balls": "-",
+      "points": "",
+      "place": ""
+     }
+    ]
+   ]
+  },
+  "38145": {
+   "url": "https://tt.league-pro.com/en/tournaments/38145",
+   "grupos": [
+    [
+     {
+      "pos": "1",
+      "jugador": "Briza Frantisek",
+      "rating": "629",
+      "resultados": [
+       "|||",
+       ":",
+       ":",
+       ":"
+      ],
+      "sets": "-",
+      "balls": "-",
+      "points": "",
+      "place": ""
+     },
+     {
+      "pos": "2",
+      "jugador": "Trinta Mihail",
+      "rating": "589",
+      "resultados": [
+       ":",
+       "|||",
+       ":",
+       ":"
+      ],
+      "sets": "-",
+      "balls": "-",
+      "points": "",
+      "place": ""
+     },
+     {
+      "pos": "3",
+      "jugador": "Kolenic Tibor",
+      "rating": "585",
+      "resultados": [
+       ":",
+       ":",
+       "|||",
+       ":"
+      ],
+      "sets": "-",
+      "balls": "-",
+      "points": "",
+      "place": ""
+     },
+     {
+      "pos": "4",
+      "jugador": "Nohejl Tomas",
+      "rating": "561",
+      "resultados": [
+       ":",
+       ":",
+       ":",
+       "|||"
+      ],
+      "sets": "-",
+      "balls": "-",
+      "points": "",
+      "place": ""
+     }
+    ]
+   ]
+  },
+  "38149": {
+   "url": "https://tt.league-pro.com/en/tournaments/38149",
+   "grupos": [
+    [
+     {
+      "pos": "1",
+      "jugador": "Niezgoda Rostislav",
+      "rating": "1103",
+      "resultados": [
+       "|||",
+       ":",
+       ":",
+       ":"
+      ],
+      "sets": "-",
+      "balls": "-",
+      "points": "",
+      "place": ""
+     },
+     {
+      "pos": "2",
+      "jugador": "Biolek Martin",
+      "rating": "1069",
+      "resultados": [
+       ":",
+       "|||",
+       ":",
+       ":"
+      ],
+      "sets": "-",
+      "balls": "-",
+      "points": "",
+      "place": ""
+     },
+     {
+      "pos": "3",
+      "jugador": "Szotkowski Jan",
+      "rating": "1068",
+      "resultados": [
+       ":",
+       ":",
+       "|||",
+       ":"
+      ],
+      "sets": "-",
+      "balls": "-",
+      "points": "",
+      "place": ""
+     },
+     {
+      "pos": "4",
+      "jugador": "Polasek Radovan",
+      "rating": "1067",
+      "resultados": [
+       ":",
+       ":",
+       ":",
+       "|||"
+      ],
+      "sets": "-",
+      "balls": "-",
+      "points": "",
+      "place": ""
+     }
+    ]
+   ]
+  },
+  "38152": {
+   "error": "TimeoutError"
+  },
+  "38154": {
+   "url": "https://tt.league-pro.com/en/tournaments/38154",
+   "grupos": [
+    [
+     {
+      "pos": "1",
+      "jugador": "Svec Jiri",
+      "rating": "447",
+      "resultados": [
+       "|||",
+       ":",
+       ":",
+       ":"
+      ],
+      "sets": "-",
+      "balls": "-",
+      "points": "",
+      "place": ""
+     },
+     {
+      "pos": "2",
+      "jugador": "Hejduk Alexander",
+      "rating": "408",
+      "resultados": [
+       ":",
+       "|||",
+       ":",
+       ":"
+      ],
+      "sets": "-",
+      "balls": "-",
+      "points": "",
+      "place": ""
+     },
+     {
+      "pos": "3",
+      "jugador": "Potensky Jan",
+      "rating": "390",
+      "resultados": [
+       ":",
+       ":",
+       "|||",
+       ":"
+      ],
+      "sets": "-",
+      "balls": "-",
+      "points": "",
+      "place": ""
+     },
+     {
+      "pos": "4",
+      "jugador": "Hyrsl Jiri",
+      "rating": "364",
+      "resultados": [
+       ":",
+       ":",
+       ":",
+       "|||"
+      ],
+      "sets": "-",
+      "balls": "-",
+      "points": "",
+      "place": ""
      }
     ]
    ]
