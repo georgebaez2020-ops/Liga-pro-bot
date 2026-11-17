@@ -15,10 +15,11 @@ jobs:
           python-version: '3.11'
       - name: Instalar
         run: pip install requests
-      - name: Bajar datos viejos de datos
+      - name: Bajar datos viejos
         run: |
           git fetch origin datos || true
-          git checkout origin/datos -- tablas.json || echo "[] " > tablas.json
+          git checkout origin/datos -- data/tablas.json || mkdir -p data && echo "[]" > data/tablas.json
+          ls -lh data/
       - name: Coleccionar 8 meses
         run: python coleccionar.py
       - name: Guardar en datos
@@ -26,6 +27,6 @@ jobs:
           git config user.name "bot"
           git config user.email "bot@bot.com"
           git checkout datos || git checkout -b datos
-          git add tablas.json
+          git add data/tablas.json || git add tablas.json || true
           git commit -m "historicos coleccionados" || true
           git push origin datos || true
