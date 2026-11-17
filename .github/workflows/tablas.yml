@@ -27,7 +27,7 @@ concurrency:
 
 jobs:
   scrape:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -46,7 +46,28 @@ jobs:
           TORNEOS: ${{ inputs.torneos }}
           DIA: ${{ inputs.dia }}
           STATUS: ${{ inputs.status }}
-        run: python tablas_scraper.py
+        run: python bot_telegram.py
+
+      - name: Enviar solo los mejores a Telegram
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python -c "
+          import json, os, urllib.request
+          try:
+              with open('salida/pronosticos.json') as f:
+                  datos = json.load(f)
+          except:
+              print('No hay pronosticos')
+              exit(0)
+          for p in datos.get('recomendados', [])[:5]:
+              msg = f\"✅ {p['partido']}\nGana: {p['favorito']} - {p['prob_modelo']}% \nCuota AiScore: {p['cuota']} - Valor: {p['valor']}%\"
+              url = f\"https://api.telegram.org/bot{os.environ['TELEGRAM_BOT_TOKEN']}/sendMessage\"
+              data = {'chat_id': os.environ['TELEGRAM_CHAT_ID'], 'text': msg}
+              req = urllib.request.Request(url, data=json.dumps(data).encode(), headers={'Content-Type': 'application/json'})
+              urllib.request.urlopen(req)
+          "
 
       - name: Guardar en la rama datos
         run: |
