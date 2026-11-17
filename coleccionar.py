@@ -1,36 +1,69 @@
-import re
-from playwright.sync_api import sync_playwright
+import json, os, requests, time
+from datetime import datetime, timedelta
 
-def prueba():
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        context = browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            viewport={"width": 1280, "height": 900}
-        )
-        page = context.new_page()
-        url = "https://m.aiscore.com/es/table-tennis"
-        print(f"Abriendo -> {url}")
-        page.goto(url, timeout=30000)
-        page.wait_for_timeout(10000)
+def coleccionar_ventana(fecha_inicio_str, fecha_fin_str, archivo_salida):
+    inicio = datetime.strptime(fecha_inicio_str, "%Y-%m-%d")
+    fin = datetime.strptime(fecha_fin_str, "%Y-%m-%d")
 
-        contenido = page.content()
-        print(f"len={len(contenido)}")
-        print("=== PRIMEROS 3000 CARACTERES ===")
-        print(contenido[:3000])
-        print("=== FIN ===")
+    todos = []
+    if os.path.exists(archivo_salida):
+        try:
+            with open(archivo_salida) as f:
+                todos = json.load(f)
+        except:
+            todos = []
 
-        texto = page.inner_text("body")[:3000]
-        print("=== TEXTO VISIBLE ===")
-        print(texto)
-        print("=== FIN TEXTO ===")
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept": "application/json",
+    }
 
-        print("Tiene Cloudflare?", "Cloudflare" in contenido or "Just a moment" in contenido)
-        print("Tiene table-tennis?", "table-tennis" in contenido.lower())
-        print("Tiene vs?", " vs " in contenido.lower())
-        print("Tiene score?", "score" in contenido.lower())
+    dia = inicio
+    while dia <= fin:
+        fecha_str = dia.strftime("%Y-%m-%d")
+        try:
+            # API publica de SofaScore para tenis de mesa
+            url = f"https://www.sofascore.com/api/v1/sport/table-tennis/scheduled-events/{fecha_str}"
+            print(f"Abriendo {fecha_str} -> {url}")
+            r = requests.get(url, headers=headers, timeout=30)
+            print(f"{fecha_str}: status={r.status_code} len={len(r.text)}")
 
-        browser.close()
+            if r.status_code == 200:
+                data = r.json()
+                eventos = data.get("events", [])
+                print(f"{fecha_str}: encontrados {len(eventos)}")
+                for ev in eventos:
+                    home = ev.get("homeTeam", {}).get("name", "?")
+                    away = ev.get("awayTeam", {}).get("name", "?")
+                    hs = ev.get("homeScore", {})
+                    aws = ev.get("awayScore", {})
+                    torneo = ev.get("tournament", {}).get("name", "")
+                    todos.append({
+                        "fecha": fecha_str,
+                        "jugador1": home,
+                        "jugador2": away,
+                        "marcador": f"{hs.get('current', '')}-{aws.get('current', '')}",
+                        "torneo": torneo,
+                        "deporte": "table-tennis",
+                        "id": ev.get("id")
+                    })
+            else:
+                print(f"{fecha_str}: no dejo, muestro inicio: {r.text[:500]}")
+
+        except Exception as e:
+            print(f"{fecha_str}: fallo - {e}")
+
+        dia += timedelta(days=1)
+        time.sleep(2)
+
+    os.makedirs("data", exist_ok=True)
+    with open(archivo_salida, "w", encoding="utf-8") as f:
+        json.dump(todos, f, ensure_ascii=False, indent=2)
+    with open("data/tablas.json", "w", encoding="utf-8") as f:
+        json.dump(todos, f, ensure_ascii=False, indent=2)
+
+    print(f"LISTO. Total guardado: {len(todos)}")
 
 if __name__ == "__main__":
-    prueba()
+    # 1 DIA DE PRUEBA
+    coleccionar_ventana("2026-03-17", "2026-03-17", "tablas.json")
