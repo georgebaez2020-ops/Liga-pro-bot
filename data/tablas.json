@@ -1,5 +1,5 @@
 {
- "generado": "2026-11-17T01:57:00-05:00",
+ "generado": "2026-11-17T07:46:44-05:00",
  "dia_colombia": "2026-11-17",
  "torneos": {
   "38130": {
@@ -269,63 +269,63 @@
     [
      {
       "pos": "1",
-      "jugador": "Jira Jiri",
-      "rating": "234",
+      "jugador": "Koch Jiri",
+      "rating": "201",
       "resultados": [
        "|||",
-       ":",
-       ":",
-       ":"
+       "3 : 2",
+       "3 : 2",
+       "3 : 1"
       ],
-      "sets": "-",
-      "balls": "-",
-      "points": "",
-      "place": ""
+      "sets": "9-5",
+      "balls": "144-125",
+      "points": "6",
+      "place": "1"
      },
      {
       "pos": "2",
       "jugador": "Bunchuzhnyi Artem",
       "rating": "206",
       "resultados": [
-       ":",
+       "2 : 3",
        "|||",
-       ":",
-       ":"
+       "2 : 3",
+       "3 : 1"
       ],
-      "sets": "-",
-      "balls": "-",
-      "points": "",
-      "place": ""
+      "sets": "7-7",
+      "balls": "134-129",
+      "points": "4",
+      "place": "2"
      },
      {
       "pos": "3",
-      "jugador": "Koch Jiri",
-      "rating": "201",
+      "jugador": "Jira Jiri",
+      "rating": "234",
       "resultados": [
-       ":",
-       ":",
+       "2 : 3",
+       "3 : 2",
        "|||",
-       ":"
+       "1 : 3"
       ],
-      "sets": "-",
-      "balls": "-",
-      "points": "",
-      "place": ""
+      "sets": "6-8",
+      "balls": "131-134",
+      "points": "4",
+      "place": "3"
      },
      {
       "pos": "4",
       "jugador": "Rychtar Jiri",
       "rating": "195",
       "resultados": [
-       ":",
-       ":",
-       ":",
+       "1 : 3",
+       "1 : 3",
+       "3 : 1",
        "|||"
       ],
-      "sets": "-",
-      "balls": "-",
-      "points": "",
-      "place": ""
+      "sets": "5-7",
+      "balls": "102-123",
+      "points": "4",
+      "place": "4"
      }
     ]
    ]
@@ -336,63 +336,63 @@
     [
      {
       "pos": "1",
-      "jugador": "Kulhanek Tomas",
-      "rating": "551",
-      "resultados": [
-       "|||",
-       ":",
-       ":",
-       ":"
-      ],
-      "sets": "-",
-      "balls": "-",
-      "points": "",
-      "place": ""
-     },
-     {
-      "pos": "2",
       "jugador": "Vilhan Martin",
       "rating": "482",
       "resultados": [
-       ":",
        "|||",
+       "3 : 1",
        ":",
-       ":"
+       "3 : 0"
       ],
-      "sets": "-",
-      "balls": "-",
-      "points": "",
-      "place": ""
+      "sets": "6-1",
+      "balls": "76-57",
+      "points": "4",
+      "place": "1"
      },
      {
-      "pos": "3",
+      "pos": "2",
       "jugador": "Syroha Michal",
       "rating": "473",
       "resultados": [
-       ":",
-       ":",
+       "1 : 3",
        "|||",
+       "3 : 2",
        ":"
       ],
-      "sets": "-",
-      "balls": "-",
-      "points": "",
-      "place": ""
+      "sets": "4-5",
+      "balls": "76-80",
+      "points": "3",
+      "place": "2"
+     },
+     {
+      "pos": "3",
+      "jugador": "Hruska Vaclav senior",
+      "rating": "452",
+      "resultados": [
+       ":",
+       "2 : 3",
+       "|||",
+       "1 : 2"
+      ],
+      "sets": "3-5",
+      "balls": "70-79",
+      "points": "1",
+      "place": "3"
      },
      {
       "pos": "4",
       "jugador": "Vlachy Lubos",
-      "rating": "",
+      "rating": "480",
       "resultados": [
+       "0 : 3",
        ":",
-       ":",
-       ":",
+       "2 : 1",
        "|||"
       ],
-      "sets": "-",
-      "balls": "-",
-      "points": "",
-      "place": ""
+      "sets": "2-4",
+      "balls": "60-66",
+      "points": "1",
+      "place": "4"
      }
     ]
    ]
@@ -403,63 +403,63 @@
     [
      {
       "pos": "1",
-      "jugador": "Bartunek Radek",
-      "rating": "620",
-      "resultados": [
-       "|||",
-       ":",
-       ":",
-       ":"
-      ],
-      "sets": "-",
-      "balls": "-",
-      "points": "",
-      "place": ""
-     },
-     {
-      "pos": "2",
       "jugador": "Smrcek Milan",
       "rating": "607",
       "resultados": [
-       ":",
        "|||",
-       ":",
-       ":"
+       "3 : 1",
+       "2 : 3",
+       "3 : 2"
       ],
-      "sets": "-",
-      "balls": "-",
-      "points": "",
-      "place": ""
+      "sets": "8-6",
+      "balls": "131-124",
+      "points": "5",
+      "place": "1"
      },
      {
-      "pos": "3",
+      "pos": "2",
       "jugador": "Steffan Jan",
       "rating": "595",
       "resultados": [
-       ":",
-       ":",
+       "1 : 3",
        "|||",
-       ":"
+       "3 : 1",
+       "3 : 1"
       ],
-      "sets": "-",
-      "balls": "-",
-      "points": "",
-      "place": ""
+      "sets": "7-5",
+      "balls": "110-98",
+      "points": "5",
+      "place": "2"
+     },
+     {
+      "pos": "3",
+      "jugador": "Bartunek Radek",
+      "rating": "620",
+      "resultados": [
+       "3 : 2",
+       "1 : 3",
+       "|||",
+       "3 : 1"
+      ],
+      "sets": "7-6",
+      "balls": "120-115",
+      "points": "5",
+      "place": "3"
      },
      {
       "pos": "4",
       "jugador": "Stefek Martin",
       "rating": "572",
       "resultados": [
-       ":",
-       ":",
-       ":",
+       "2 : 3",
+       "1 : 3",
+       "1 : 3",
        "|||"
       ],
-      "sets": "-",
-      "balls": "-",
-      "points": "",
-      "place": ""
+      "sets": "4-9",
+      "balls": "110-134",
+      "points": "3",
+      "place": "4"
      }
     ]
    ]
@@ -470,63 +470,63 @@
     [
      {
       "pos": "1",
-      "jugador": "Briza Frantisek",
-      "rating": "629",
-      "resultados": [
-       "|||",
-       ":",
-       ":",
-       ":"
-      ],
-      "sets": "-",
-      "balls": "-",
-      "points": "",
-      "place": ""
-     },
-     {
-      "pos": "2",
       "jugador": "Trinta Mihail",
       "rating": "589",
       "resultados": [
-       ":",
        "|||",
+       "2 : 3",
        ":",
-       ":"
+       "3 : 1"
       ],
-      "sets": "-",
-      "balls": "-",
-      "points": "",
-      "place": ""
+      "sets": "5-4",
+      "balls": "85-86",
+      "points": "3",
+      "place": "1"
      },
      {
-      "pos": "3",
+      "pos": "2",
       "jugador": "Kolenic Tibor",
       "rating": "585",
       "resultados": [
-       ":",
-       ":",
+       "3 : 2",
        "|||",
+       "0 : 3",
        ":"
       ],
-      "sets": "-",
-      "balls": "-",
-      "points": "",
-      "place": ""
+      "sets": "3-5",
+      "balls": "67-77",
+      "points": "3",
+      "place": "2"
+     },
+     {
+      "pos": "3",
+      "jugador": "Briza Frantisek",
+      "rating": "629",
+      "resultados": [
+       ":",
+       "3 : 0",
+       "|||",
+       "1 : 2"
+      ],
+      "sets": "4-2",
+      "balls": "67-50",
+      "points": "2",
+      "place": "3"
      },
      {
       "pos": "4",
       "jugador": "Nohejl Tomas",
-      "rating": "561",
+      "rating": "546",
       "resultados": [
+       "1 : 3",
        ":",
-       ":",
-       ":",
+       "2 : 1",
        "|||"
       ],
-      "sets": "-",
-      "balls": "-",
-      "points": "",
-      "place": ""
+      "sets": "3-4",
+      "balls": "69-75",
+      "points": "1",
+      "place": "4"
      }
     ]
    ]
@@ -537,63 +537,63 @@
     [
      {
       "pos": "1",
-      "jugador": "Niezgoda Rostislav",
-      "rating": "1103",
-      "resultados": [
-       "|||",
-       ":",
-       ":",
-       ":"
-      ],
-      "sets": "-",
-      "balls": "-",
-      "points": "",
-      "place": ""
-     },
-     {
-      "pos": "2",
       "jugador": "Biolek Martin",
       "rating": "1069",
       "resultados": [
-       ":",
        "|||",
-       ":",
-       ":"
+       "3 : 0",
+       "3 : 1",
+       "3 : 1"
       ],
-      "sets": "-",
-      "balls": "-",
-      "points": "",
-      "place": ""
+      "sets": "9-2",
+      "balls": "117-92",
+      "points": "6",
+      "place": "1"
+     },
+     {
+      "pos": "2",
+      "jugador": "Polasek Radovan",
+      "rating": "1067",
+      "resultados": [
+       "0 : 3",
+       "|||",
+       "3 : 2",
+       "3 : 1"
+      ],
+      "sets": "6-6",
+      "balls": "105-113",
+      "points": "5",
+      "place": "2"
      },
      {
       "pos": "3",
       "jugador": "Szotkowski Jan",
       "rating": "1068",
       "resultados": [
-       ":",
-       ":",
+       "1 : 3",
+       "2 : 3",
        "|||",
-       ":"
+       "3 : 0"
       ],
-      "sets": "-",
-      "balls": "-",
-      "points": "",
-      "place": ""
+      "sets": "6-6",
+      "balls": "118-110",
+      "points": "4",
+      "place": "3"
      },
      {
       "pos": "4",
-      "jugador": "Polasek Radovan",
-      "rating": "1067",
+      "jugador": "Niezgoda Rostislav",
+      "rating": "1103",
       "resultados": [
-       ":",
-       ":",
-       ":",
+       "1 : 3",
+       "1 : 3",
+       "0 : 3",
        "|||"
       ],
-      "sets": "-",
-      "balls": "-",
-      "points": "",
-      "place": ""
+      "sets": "2-9",
+      "balls": "90-115",
+      "points": "3",
+      "place": "4"
      }
     ]
    ]
@@ -604,63 +604,63 @@
     [
      {
       "pos": "1",
-      "jugador": "Zika Tadeas",
-      "rating": "1080",
-      "resultados": [
-       "|||",
-       ":",
-       ":",
-       ":"
-      ],
-      "sets": "-",
-      "balls": "-",
-      "points": "",
-      "place": ""
-     },
-     {
-      "pos": "2",
       "jugador": "Dousek Tomas",
       "rating": "1055",
       "resultados": [
-       ":",
        "|||",
-       ":",
-       ":"
+       "3 : 1",
+       "3 : 1",
+       "3 : 1"
       ],
-      "sets": "-",
-      "balls": "-",
-      "points": "",
-      "place": ""
+      "sets": "9-3",
+      "balls": "123-94",
+      "points": "6",
+      "place": "1"
+     },
+     {
+      "pos": "2",
+      "jugador": "Pilch Jakub",
+      "rating": "1057",
+      "resultados": [
+       "1 : 3",
+       "|||",
+       "3 : 1",
+       "3 : 0"
+      ],
+      "sets": "7-4",
+      "balls": "109-92",
+      "points": "5",
+      "place": "2"
      },
      {
       "pos": "3",
-      "jugador": "Pilch Jakub",
-      "rating": "1052",
-      "resultados": [
-       ":",
-       ":",
-       "|||",
-       ":"
-      ],
-      "sets": "-",
-      "balls": "-",
-      "points": "",
-      "place": ""
-     },
-     {
-      "pos": "4",
       "jugador": "Navedla Matyas",
       "rating": "1033",
       "resultados": [
-       ":",
-       ":",
-       ":",
+       "1 : 3",
+       "1 : 3",
+       "|||",
+       "3 : 1"
+      ],
+      "sets": "5-7",
+      "balls": "104-116",
+      "points": "4",
+      "place": "3"
+     },
+     {
+      "pos": "4",
+      "jugador": "Zika Tadeas",
+      "rating": "1080",
+      "resultados": [
+       "1 : 3",
+       "0 : 3",
+       "1 : 3",
        "|||"
       ],
-      "sets": "-",
-      "balls": "-",
-      "points": "",
-      "place": ""
+      "sets": "2-9",
+      "balls": "82-116",
+      "points": "3",
+      "place": "4"
      }
     ]
    ]
@@ -671,63 +671,197 @@
     [
      {
       "pos": "1",
-      "jugador": "Svec Jiri",
-      "rating": "447",
+      "jugador": "Hejduk Alexander",
+      "rating": "413",
       "resultados": [
        "|||",
-       ":",
-       ":",
-       ":"
+       "3 : 2",
+       "3 : 1",
+       "3 : 0"
       ],
-      "sets": "-",
-      "balls": "-",
-      "points": "",
-      "place": ""
+      "sets": "9-3",
+      "balls": "123-106",
+      "points": "6",
+      "place": "1"
      },
      {
       "pos": "2",
-      "jugador": "Hejduk Alexander",
-      "rating": "408",
-      "resultados": [
-       ":",
-       "|||",
-       ":",
-       ":"
-      ],
-      "sets": "-",
-      "balls": "-",
-      "points": "",
-      "place": ""
-     },
-     {
-      "pos": "3",
       "jugador": "Potensky Jan",
       "rating": "390",
       "resultados": [
-       ":",
-       ":",
+       "2 : 3",
        "|||",
-       ":"
+       "3 : 1",
+       "3 : 1"
       ],
-      "sets": "-",
-      "balls": "-",
-      "points": "",
-      "place": ""
+      "sets": "8-5",
+      "balls": "133-120",
+      "points": "5",
+      "place": "2"
+     },
+     {
+      "pos": "3",
+      "jugador": "Svec Jiri",
+      "rating": "443",
+      "resultados": [
+       "1 : 3",
+       "1 : 3",
+       "|||",
+       "3 : 0"
+      ],
+      "sets": "5-6",
+      "balls": "108-106",
+      "points": "4",
+      "place": "3"
      },
      {
       "pos": "4",
       "jugador": "Hyrsl Jiri",
       "rating": "364",
       "resultados": [
-       ":",
-       ":",
-       ":",
+       "0 : 3",
+       "1 : 3",
+       "0 : 3",
        "|||"
       ],
-      "sets": "-",
-      "balls": "-",
-      "points": "",
-      "place": ""
+      "sets": "1-9",
+      "balls": "79-111",
+      "points": "3",
+      "place": "4"
+     }
+    ]
+   ]
+  },
+  "38155": {
+   "url": "https://tt.league-pro.com/en/tournaments/38155",
+   "grupos": [
+    [
+     {
+      "pos": "1",
+      "jugador": "Madle Ludek",
+      "rating": "394",
+      "resultados": [
+       "|||",
+       "3 : 1",
+       ":",
+       "3 : 0"
+      ],
+      "sets": "6-1",
+      "balls": "74-48",
+      "points": "4",
+      "place": "1"
+     },
+     {
+      "pos": "2",
+      "jugador": "Vrabec Milan",
+      "rating": "387",
+      "resultados": [
+       "1 : 3",
+       "|||",
+       "3 : 0",
+       ":"
+      ],
+      "sets": "4-3",
+      "balls": "61-64",
+      "points": "3",
+      "place": "2"
+     },
+     {
+      "pos": "3",
+      "jugador": "Havrda Leos",
+      "rating": "407",
+      "resultados": [
+       ":",
+       "0 : 3",
+       "|||",
+       "1 : 2"
+      ],
+      "sets": "1-5",
+      "balls": "49-65",
+      "points": "1",
+      "place": "3"
+     },
+     {
+      "pos": "4",
+      "jugador": "Hyrsl Jiri",
+      "rating": "352",
+      "resultados": [
+       "0 : 3",
+       ":",
+       "2 : 1",
+       "|||"
+      ],
+      "sets": "2-4",
+      "balls": "52-59",
+      "points": "1",
+      "place": "4"
+     }
+    ]
+   ]
+  },
+  "38159": {
+   "url": "https://tt.league-pro.com/en/tournaments/38159",
+   "grupos": [
+    [
+     {
+      "pos": "1",
+      "jugador": "Kraninger Tomas",
+      "rating": "545",
+      "resultados": [
+       "|||",
+       "0 : 3",
+       ":",
+       "3 : 1"
+      ],
+      "sets": "3-4",
+      "balls": "54-68",
+      "points": "3",
+      "place": "1"
+     },
+     {
+      "pos": "2",
+      "jugador": "Schneeberger Antonin",
+      "rating": "511",
+      "resultados": [
+       "3 : 0",
+       "|||",
+       "1 : 2",
+       ":"
+      ],
+      "sets": "4-2",
+      "balls": "62-48",
+      "points": "2",
+      "place": "2"
+     },
+     {
+      "pos": "3",
+      "jugador": "Guliak Roman",
+      "rating": "561",
+      "resultados": [
+       ":",
+       "2 : 1",
+       "|||",
+       "3 : 0"
+      ],
+      "sets": "5-1",
+      "balls": "67-44",
+      "points": "2",
+      "place": "3"
+     },
+     {
+      "pos": "4",
+      "jugador": "Kvasnicka Radim",
+      "rating": "535",
+      "resultados": [
+       "1 : 3",
+       ":",
+       "0 : 3",
+       "|||"
+      ],
+      "sets": "1-6",
+      "balls": "50-73",
+      "points": "2",
+      "place": "4"
      }
     ]
    ]
