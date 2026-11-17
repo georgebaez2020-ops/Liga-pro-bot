@@ -93,7 +93,7 @@ async def traer_pronosticos() -> str:
         return "⚠️ Falta ODDSPAPI_KEY en Render (Environment)."
 
     params = {
-        "apiKey": "ODDSPAPI_KEY",
+        "apiKey": ODDSPAPI_KEY,
         "tournamentIds": CZECH_LIGA_PRO,
         "bookmakers": CASA_REFERENCIA,
     }
