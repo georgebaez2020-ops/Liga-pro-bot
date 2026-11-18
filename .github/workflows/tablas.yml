@@ -58,6 +58,9 @@ jobs:
           MAX_PAGINAS: '10'
         run: python tablas_scraper.py
 
+      - name: Probar analizador de jugadores
+        run: python -m unittest test_analisis_jugadores.py
+
       - name: Analizar historial de jugadores
         run: python analisis_jugadores.py
 
