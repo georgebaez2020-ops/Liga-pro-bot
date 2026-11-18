@@ -86,11 +86,14 @@ async def descubrir_fecha(page, dia: date) -> list[dict]:
 
 async def ejecutar(inicio: date, fin: date, max_torneos: int, pausa: float) -> dict:
     db = HistoryDB()
+    # Verifica la conexión real antes de iniciar el rastreo web.
+    # Evita recorrer días/torneos si DATABASE_URL no es accesible desde GitHub Actions.
+    db.initialize()
     resultado = {
         "generado": datetime.now(COL).isoformat(timespec="seconds"),
         "rango_solicitado": {"desde": inicio.isoformat(), "hasta": fin.isoformat()},
         "torneos": {}, "resumen": {
-            "dias_consultados": 0, "torneos_encontrados": 0,
+            "dias_consultados": 0, "torneos_encontrados": 0, "torneos_fuera_rango": 0,
             "torneos_guardados": 0, "torneos_con_error": 0,
             "torneos_sin_fecha_oficial": 0, "grupos_completos": 0,
             "partidos_reconstruidos": 0, "partidos_esperados": 0,
@@ -129,6 +132,11 @@ async def ejecutar(inicio: date, fin: date, max_torneos: int, pausa: float) -> d
                     if not dato.get("fecha_torneo"):
                         resultado["resumen"]["torneos_sin_fecha_oficial"] += 1
                         continue
+                    fecha_oficial = date.fromisoformat(str(dato["fecha_torneo"])[:10])
+                    if not (inicio <= fecha_oficial <= fin):
+                        resultado["resumen"]["torneos_fuera_rango"] += 1
+                        dato["excluido"] = "La fecha oficial de la ficha está fuera del rango solicitado"
+                        continue
                     counts = db.save_historical_scrape(dato)
                     resultado["resumen"]["torneos_guardados"] += 1
                     resultado["resumen"]["grupos_completos"] += dato.get("grupos_completos", 0)
@@ -160,8 +168,9 @@ async def ejecutar(inicio: date, fin: date, max_torneos: int, pausa: float) -> d
         )
     elif resultado["resumen"]["torneos_guardados"] == 0:
         resultado["error_global"] = (
-            "Se encontraron torneos, pero ninguno pudo guardarse en la base de datos. "
-            "Revisa la conexión PostgreSQL y los errores del diagnóstico."
+            "Se encontraron torneos, pero ninguno pudo guardarse. "
+            "Consulta los errores individuales; si aparece \"Temporary failure in name resolution\", "
+            "DATABASE_URL debe ser la External Database URL de Render para GitHub Actions."
         )
     elif resultado["resumen"]["limite_alcanzado"]:
         resultado["error_global"] = (
