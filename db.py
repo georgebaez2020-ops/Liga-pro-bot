@@ -116,6 +116,24 @@ class HistoryDB:
                 self._execute(cur, statement)
         return self.kind
 
+    def listar_snapshots(self) -> list[dict[str, Any]]:
+        """Devuelve snapshots cronológicos para análisis de evolución entre capturas."""
+        self.initialize()
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute("""SELECT tournament_id, captured_at, status, payload
+                FROM tournament_snapshots ORDER BY captured_at ASC, tournament_id ASC""")
+            rows = cur.fetchall()
+        return [
+            {
+                "tournament_id": str(row[0]),
+                "captured_at": str(row[1]),
+                "status": str(row[2]),
+                "payload": json.loads(row[3]) if isinstance(row[3], str) else row[3],
+            }
+            for row in rows
+        ]
+
     def save_scrape(self, data: dict[str, Any]) -> dict[str, int]:
         """Guarda estado actual y snapshots; solo promueve marcadores recíprocos completos."""
         self.initialize()
