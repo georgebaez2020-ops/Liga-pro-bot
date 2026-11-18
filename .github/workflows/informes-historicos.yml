@@ -2,6 +2,13 @@ name: Generar informes del historico
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - feature/status-upcoming-live-finished
+    paths:
+      - 'perfil_jugadores.py'
+      - 'historial_rendimiento.py'
+      - '.github/workflows/informes-historicos.yml'
 
 permissions:
   contents: read
