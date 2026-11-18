@@ -206,6 +206,7 @@ async def extraer(page, torneo):
         )
         analisis_cronologico.append({
             "grupo": numero,
+            "fecha_torneo": extraido.get("fecha_torneo"),
             "partidos_ficha": extraido["partidos"],
             "rating_por_jugador": extraido["rating_por_jugador"],
             "reconstruccion": reconstruido,
@@ -218,7 +219,7 @@ async def extraer(page, torneo):
         (x.get("fecha_torneo") for x in analisis_cronologico if x.get("fecha_torneo")),
         None,
     )
-    if not fecha_torneo and not grupos:
+    if not fecha_torneo:
         fecha_torneo = extraido.get("fecha_torneo")
     for partido in calendario["partidos"]:
         partido["fecha"] = fecha_torneo
