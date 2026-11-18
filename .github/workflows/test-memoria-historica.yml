@@ -19,7 +19,7 @@ on:
       - 'test_rendimiento_presion.py'
       - 'tablas_scraper.py'
       - 'reconstruccion_torneo.py'
-      - 'test_reconstruccion_torneo.py'
+            test_reconstruccion_torneo.py \
       - 'test_inteligencia_torneo.py'
       - 'inspeccionar_hoja_partido.py'
       - 'test_inspeccionar_hoja_partido.py'
