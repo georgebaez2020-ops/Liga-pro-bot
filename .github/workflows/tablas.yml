@@ -8,6 +8,8 @@ on:
       - 'tablas_scraper.py'
       - 'analisis_jugadores.py'
       - 'test_analisis_jugadores.py'
+      - 'db.py'
+      - 'requirements.txt'
       - '.github/workflows/tablas.yml'
   workflow_dispatch:
     inputs:
@@ -46,9 +48,9 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Instalar Playwright
+      - name: Instalar dependencias
         run: |
-          pip install playwright
+          pip install playwright "psycopg[binary]==3.2.6"
           playwright install --with-deps chromium
 
       - name: Extraer torneos y tablas
@@ -58,6 +60,7 @@ jobs:
           STATUS: ${{ inputs.status || 'all' }}
           MAX_TORNEOS: '100'
           MAX_PAGINAS: '10'
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python tablas_scraper.py
 
       - name: Probar analizador de jugadores
