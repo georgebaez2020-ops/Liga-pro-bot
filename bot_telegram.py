@@ -259,6 +259,8 @@ def main():
     app.add_handler(CommandHandler("calendario", calendario))
     app.add_handler(CommandHandler("pronosticos", pronosticos))
     app.add_handler(CommandHandler("jugador", jugador))
+    app.add_handler(CommandHandler("necesidad", necesidad))
+    app.add_handler(CommandHandler("rendimiento", rendimiento))
     app.add_handler(CommandHandler("h2h", h2h))
     app.add_handler(CommandHandler("evaluacion", evaluacion))
     if app.job_queue is None:
