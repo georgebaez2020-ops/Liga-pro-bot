@@ -30,6 +30,86 @@ def _best_place(points, pending, player):
     return best
 
 
+def _tabla_ordenada(names, points, wins, losses, sets_for, sets_against,
+                    game_points_for, game_points_against, h2h):
+    """Ordena con los desempates oficiales; no inventa los puntos de juego."""
+    rows = []
+    for name in names:
+        gp_for, gp_against = game_points_for[name], game_points_against[name]
+        rows.append({
+            "jugador": name, "puntos": points[name], "victorias": wins[name],
+            "derrotas": losses[name], "sets_favor": sets_for[name],
+            "sets_contra": sets_against[name],
+            "diferencia_sets": sets_for[name] - sets_against[name],
+            "puntos_juego_favor": gp_for,
+            "puntos_juego_contra": gp_against,
+            "diferencia_puntos_juego": (
+                gp_for - gp_against if gp_for is not None and gp_against is not None else None
+            ),
+        })
+
+    # Criterios oficiales en orden: puntos de partido, sets ganados,
+    # diferencia de sets, diferencia de puntos de juego, puntos de juego ganados,
+    # H2H solo si quedan exactamente dos empatados, y finalmente sorteo.
+    def key(row):
+        return (row["puntos"], row["sets_favor"], row["diferencia_sets"])
+
+    rows.sort(key=lambda r: (-r["puntos"], -r["sets_favor"],
+                             -r["diferencia_sets"], r["jugador"].casefold()))
+    unresolved = []
+    i = 0
+    while i < len(rows):
+        j = i + 1
+        while j < len(rows) and key(rows[j]) == key(rows[i]):
+            j += 1
+        tied = rows[i:j]
+        if len(tied) > 1:
+            # No se puede saltar a H2H mientras falten los criterios de puntos.
+            point_data_complete = all(
+                row["diferencia_puntos_juego"] is not None and
+                row["puntos_juego_favor"] is not None for row in tied
+            )
+            if point_data_complete:
+                tied.sort(key=lambda r: (
+                    -r["diferencia_puntos_juego"], -r["puntos_juego_favor"],
+                    r["jugador"].casefold()
+                ))
+                k = 0
+                while k < len(tied):
+                    m = k + 1
+                    while m < len(tied) and (
+                        tied[m]["diferencia_puntos_juego"] == tied[k]["diferencia_puntos_juego"]
+                        and tied[m]["puntos_juego_favor"] == tied[k]["puntos_juego_favor"]
+                    ):
+                        m += 1
+                    exact_tie = tied[k:m]
+                    if len(exact_tie) == 2:
+                        result = h2h.get(frozenset((exact_tie[0]["jugador"], exact_tie[1]["jugador"])))
+                        if result == exact_tie[1]["jugador"]:
+                            exact_tie.reverse()
+                    elif len(exact_tie) > 1:
+                        unresolved.append({
+                            "jugadores": [r["jugador"] for r in exact_tie],
+                            "motivo": "empate tras puntos de juego; el H2H solo aplica a dos jugadores",
+                            "desempate_final": "sorteo",
+                        })
+                    tied[k:m] = exact_tie
+                    k = m
+            else:
+                unresolved.append({
+                    "jugadores": [r["jugador"] for r in tied],
+                    "motivo": "faltan puntos de juego para aplicar los desempates oficiales antes del H2H",
+                    "criterios_disponibles": ["puntos de partido", "sets ganados", "diferencia de sets"],
+                    "criterios_pendientes": ["diferencia de puntos de juego", "puntos de juego ganados", "H2H si quedan dos", "sorteo"],
+                })
+        rows[i:j] = tied
+        i = j
+
+    for position, row in enumerate(rows, 1):
+        row["puesto_provisional"] = position
+    return rows, unresolved
+
+
 def reconstruir_secuencia(jugadores, partidos, rating_torneo=None):
     names = [str(x).strip() for x in jugadores]
     if len(names) not in (4, 5) or len(set(names)) != len(names):
@@ -38,6 +118,10 @@ def reconstruir_secuencia(jugadores, partidos, rating_torneo=None):
     played, points = set(), {n: 0 for n in names}
     wins, losses = {n: 0 for n in names}, {n: 0 for n in names}
     sets_for, sets_against = {n: 0 for n in names}, {n: 0 for n in names}
+    game_points_for = {n: 0 for n in names}
+    game_points_against = {n: 0 for n in names}
+    game_points_known = {n: True for n in names}
+    h2h = {}
     sequence, warnings, normalized = [], [], []
 
     for idx, match in enumerate(partidos):
@@ -69,10 +153,11 @@ def reconstruir_secuencia(jugadores, partidos, rating_torneo=None):
             lose_points[player] += 1
             loss_best = _best_place(lose_points, remaining, player)
             necessity[player] = {
-                "debe_ganar_para_seguir_en_fase": win_best <= cutoff_phase and loss_best > cutoff_phase,
-                "puede_clasificar_si_pierde": loss_best <= cutoff_phase,
-                "mejor_puesto_si_gana": win_best,
-                "mejor_puesto_si_pierde": loss_best,
+                "debe_ganar_por_puntos_para_seguir_en_fase": win_best <= cutoff_phase and loss_best > cutoff_phase,
+                "puede_seguir_por_puntos_si_pierde": loss_best <= cutoff_phase,
+                "mejor_puesto_posible_por_puntos_si_gana": win_best,
+                "mejor_puesto_posible_por_puntos_si_pierde": loss_best,
+                "certeza": "solo_por_puntos; desempates no proyectables sin marcadores de puntos de juego",
             }
         winner, loser = (a, b) if score[0] > score[1] else (b, a)
         points[winner] += 2
@@ -83,23 +168,42 @@ def reconstruir_secuencia(jugadores, partidos, rating_torneo=None):
         sets_against[a] += score[1]
         sets_for[b] += score[1]
         sets_against[b] += score[0]
+        h2h[frozenset((a, b))] = winner
+
+        # Si una tarjeta aporta total de puntos disputados por jugador, se acumula.
+        # La página pública actualmente no los incluye en el calendario; si faltan
+        # en un partido, el criterio de puntos queda explícitamente no disponible.
+        pa, pb = match.get("puntos_juego_a"), match.get("puntos_juego_b")
+        if pa is None or pb is None:
+            game_points_known[a] = game_points_known[b] = False
+        else:
+            game_points_for[a] += int(pa)
+            game_points_against[a] += int(pb)
+            game_points_for[b] += int(pb)
+            game_points_against[b] += int(pa)
+
+        gp_for = {n: game_points_for[n] if game_points_known[n] else None for n in names}
+        gp_against = {n: game_points_against[n] if game_points_known[n] else None for n in names}
+        table, ties = _tabla_ordenada(
+            names, points, wins, losses, sets_for, sets_against,
+            gp_for, gp_against, h2h
+        )
         sequence.append({
             "orden": match.get("orden", idx + 1), "hora": match.get("hora"),
             "jugador_a": a, "jugador_b": b,
             "marcador_sets": f"{score[0]}:{score[1]}", "ganador": winner,
             "necesidad_antes": necessity,
             "cumplio_necesidad": {
-                a: (winner == a) if necessity[a]["debe_ganar_para_seguir_en_fase"] else None,
-                b: (winner == b) if necessity[b]["debe_ganar_para_seguir_en_fase"] else None,
+                a: (winner == a) if necessity[a]["debe_ganar_por_puntos_para_seguir_en_fase"] else None,
+                b: (winner == b) if necessity[b]["debe_ganar_por_puntos_para_seguir_en_fase"] else None,
             },
-            "tabla_despues": sorted([
-                {"jugador": n, "puntos": points[n], "victorias": wins[n],
-                 "derrotas": losses[n], "sets_favor": sets_for[n],
-                 "sets_contra": sets_against[n],
-                 "diferencia_sets": sets_for[n] - sets_against[n]}
-                for n in names
-            ], key=lambda row: (-row["puntos"], -row["sets_favor"],
-                                -row["diferencia_sets"], row["jugador"].casefold())),
+            "tabla_despues": table,
+            "empates_no_resueltos": ties,
+            "desempates_oficiales_disponibles": (
+                ["puntos de partido", "sets ganados", "diferencia de sets"] +
+                (["diferencia de puntos de juego", "puntos de juego ganados", "H2H (solo dos empatados)"]
+                 if all(game_points_known.values()) else [])
+            ),
         })
 
     ratings = {}
@@ -119,16 +223,20 @@ def reconstruir_secuencia(jugadores, partidos, rating_torneo=None):
             "fuente": "seccion Players de la ficha del torneo",
         }
     expected = len(names) * (len(names) - 1) // 2
+    final_table = sequence[-1]["tabla_despues"] if sequence else []
     return {
-        "metodo": "resultados oficiales ordenados por hora; tabla reconstruida tras cada partido",
+        "metodo": "resultados oficiales ordenados por hora; 2/1 puntos; desempates oficiales hasta los datos disponibles",
         "partidos_reconstruidos": len(sequence), "partidos_esperados": expected,
         "secuencia": sequence,
-        "tabla_final_reconstruida": sequence[-1]["tabla_despues"] if sequence else [],
+        "tabla_final_reconstruida": final_table,
+        "empates_finales_no_resueltos": sequence[-1]["empates_no_resueltos"] if sequence else [],
         "rating_por_jugador": ratings,
-        "advertencias": warnings + (["La tabla usa puntos y sets; los desempates oficiales por puntos de juego/H2H no se simulan por partido."] if sequence else []),
+        "advertencias": warnings + ([
+            "El calendario extraído aporta marcador de sets, pero no puntos anotados en cada set. Por eso no se pueden aplicar diferencia de puntos de juego, total de puntos ni H2H cuando esos criterios previos faltan."
+        ] if sequence else []),
         "completa": len(sequence) == expected and not warnings,
+        "clasificacion_desempates_completa": bool(sequence) and not sequence[-1]["empates_no_resueltos"],
     }
-
 
 def parsear_detalle_oficial(texto, grupo):
     """Lee tarjetas de partido multilínea del texto visible de la ficha oficial."""
