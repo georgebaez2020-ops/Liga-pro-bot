@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import patch
 
 from servicio_pronosticos import listar_calendario
+from reconstruccion_torneo import parsear_detalle_oficial
 
 
 class PredictionServiceTests(unittest.TestCase):
@@ -31,6 +32,18 @@ class PredictionServiceTests(unittest.TestCase):
         rows = listar_calendario(tournaments)
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["estado"], "upcoming")
+
+    def test_official_tournament_date_is_extracted(self):
+        parsed = parsear_detalle_oficial(
+            "Players\\nPlayer\\nTournament games\\nGroup\\n17 Nov 2026\\nTuesday\\n08:00",
+            [],
+        )
+        self.assertEqual(parsed["fecha_torneo"], "2026-11-17")
+
+    def test_missing_official_date_remains_unknown(self):
+        parsed = parsear_detalle_oficial("Players\\nTournament games\\nPlanned\\n08:00", [])
+        self.assertIsNone(parsed["fecha_torneo"])
+        self.assertTrue(any("fecha oficial" in x.get("motivo", "") for x in parsed["advertencias"]))
 
 
 if __name__ == "__main__":
