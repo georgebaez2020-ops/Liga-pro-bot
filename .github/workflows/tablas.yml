@@ -68,6 +68,37 @@ jobs:
           fi
           python tablas_scraper.py
 
+      - name: Verificar registros guardados en PostgreSQL
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          python - <<'PY'
+          import os
+          import psycopg
+
+          url = os.environ.get("DATABASE_URL", "")
+          if not url:
+              raise SystemExit("ERROR: falta DATABASE_URL en la verificación.")
+
+          with psycopg.connect(url) as conn:
+              with conn.cursor() as cur:
+                  tables = ("tournaments", "tournament_snapshots", "players",
+                            "tournament_players", "matches")
+                  counts = {}
+                  for table in tables:
+                      cur.execute(f"SELECT COUNT(*) FROM {table}")
+                      counts[table] = cur.fetchone()[0]
+
+          print("REGISTROS CONFIRMADOS EN POSTGRESQL:")
+          for table, count in counts.items():
+              print(f"{table}: {count}")
+
+          if not any(counts.values()):
+              raise SystemExit("ERROR: la conexión funciona, pero las tablas están vacías.")
+          if counts["tournaments"] == 0:
+              raise SystemExit("ERROR: no hay torneos guardados.")
+          PY
+
       - name: Probar analizador de jugadores
         run: python -m unittest test_analisis_jugadores.py
 
