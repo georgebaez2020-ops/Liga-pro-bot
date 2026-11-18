@@ -9,6 +9,8 @@ on:
       - 'test_db.py'
       - 'test_analisis_jugadores.py'
       - 'inteligencia_torneo.py'
+      - 'rendimiento_presion.py'
+      - 'test_rendimiento_presion.py'
       - 'tablas_scraper.py'
       - 'test_inteligencia_torneo.py'
       - 'requirements.txt'
@@ -30,4 +32,4 @@ jobs:
       - name: Instalar dependencias de base de datos
         run: pip install "psycopg[binary]==3.2.6"
       - name: Ejecutar pruebas
-        run: python -m unittest -v test_analisis_jugadores.py test_db.py test_inteligencia_torneo.py
+        run: python -m unittest -v test_analisis_jugadores.py test_db.py test_inteligencia_torneo.py test_rendimiento_presion.py
