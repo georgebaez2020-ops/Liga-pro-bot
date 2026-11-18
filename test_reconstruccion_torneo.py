@@ -120,6 +120,39 @@ Picek P
         self.assertEqual(parsed["partidos"][3]["fase"], "final")
         self.assertEqual(parsed["rating_por_jugador"]["Andrle Tomas"]["variacion"], 12)
 
+    def test_parses_rating_delta_when_sign_and_number_are_separate_lines(self):
+        group = [{"jugador": "A", "rating": "500"}, {"jugador": "B", "rating": "510"},
+                 {"jugador": "C", "rating": "520"}, {"jugador": "D", "rating": "530"}]
+        page_text = """Players
+A
+4 (3-1)
+500
++
+12
+B
+4 (2-2)
+510
+-
+8
+C
+4 (1-3)
+520
++
+3
+D
+4 (0-4)
+530
+-
+15
+Group
+Tournament games
+"""
+        parsed = parsear_detalle_oficial(page_text, group)
+        self.assertEqual(parsed["rating_por_jugador"]["A"]["variacion"], 12)
+        self.assertEqual(parsed["rating_por_jugador"]["B"]["variacion"], -8)
+        self.assertEqual(parsed["rating_por_jugador"]["C"]["variacion"], 3)
+        self.assertEqual(parsed["rating_por_jugador"]["D"]["variacion"], -15)
+
     def test_live_partial_score_is_not_treated_as_finished(self):
         group = [{"jugador": "A", "rating": "384"}, {"jugador": "B", "rating": "366"},
                  {"jugador": "C", "rating": "313"}, {"jugador": "D", "rating": "409"}]
