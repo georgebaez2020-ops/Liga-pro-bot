@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 from playwright.async_api import async_playwright
 
 from db import HistoryDB
+from inteligencia_torneo import integrar_inteligencia_en_resultado
 
 COL = ZoneInfo("America/Bogota")
 PRAGA = ZoneInfo("Europe/Prague")
@@ -253,6 +254,10 @@ async def main():
     os.makedirs(SALIDA, exist_ok=True)
     with open(f"{SALIDA}/tablas.json", "w", encoding="utf-8") as f:
         json.dump(resultado, f, ensure_ascii=False, indent=2)
+
+    # Analiza cada grupo antes de guardar; el JSON y los snapshots conservan el análisis.
+    integrar_inteligencia_en_resultado(resultado)
+    print("Resumen de inteligencia:", json.dumps(resultado["resumen_inteligencia"], ensure_ascii=False))
 
     # Persistencia: PostgreSQL si DATABASE_URL existe; SQLite local para desarrollo.
     guardado = HistoryDB().save_scrape(resultado)
