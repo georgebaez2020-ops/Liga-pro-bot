@@ -11,7 +11,9 @@ from playwright.async_api import async_playwright
 
 from db import HistoryDB
 from inteligencia_torneo import integrar_inteligencia_en_resultado
-from reconstruccion_torneo import parsear_detalle_oficial, reconstruir_secuencia
+from reconstruccion_torneo import (
+    consolidar_partidos_torneo, parsear_detalle_oficial, reconstruir_secuencia,
+)
 
 COL = ZoneInfo("America/Bogota")
 PRAGA = ZoneInfo("Europe/Prague")
@@ -209,8 +211,10 @@ async def extraer(page, torneo):
             "reconstruccion": reconstruido,
             "advertencias_extraccion": extraido["advertencias"],
         })
+    calendario = consolidar_partidos_torneo(analisis_cronologico, partidos_ficha_sin_grupo)
     return {
         **torneo,
+        **calendario,
         "grupos": grupos,
         "detalle_texto": detalle_texto,
         "analisis_cronologico": analisis_cronologico,
