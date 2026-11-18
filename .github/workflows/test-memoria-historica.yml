@@ -9,6 +9,7 @@ on:
       - 'test_db.py'
       - 'test_analisis_jugadores.py'
       - 'inteligencia_torneo.py'
+      - 'tablas_scraper.py'
       - 'test_inteligencia_torneo.py'
       - 'requirements.txt'
       - '.github/workflows/test-memoria-historica.yml'
