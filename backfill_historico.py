@@ -94,6 +94,7 @@ async def ejecutar(inicio: date, fin: date, max_torneos: int, pausa: float) -> d
             "torneos_guardados": 0, "torneos_con_error": 0,
             "torneos_sin_fecha_oficial": 0, "grupos_completos": 0,
             "partidos_reconstruidos": 0, "partidos_esperados": 0,
+            "limite_torneos": max_torneos, "limite_alcanzado": False,
         },
     }
     ids_vistos = set()
@@ -144,6 +145,11 @@ async def ejecutar(inicio: date, fin: date, max_torneos: int, pausa: float) -> d
                 if pausa:
                     await asyncio.sleep(pausa)
             dia += timedelta(days=1)
+        if len(ids_vistos) >= max_torneos and dia <= fin:
+            resultado["resumen"]["limite_alcanzado"] = True
+            resultado["rango_procesado_hasta"] = (dia - timedelta(days=1)).isoformat()
+        else:
+            resultado["rango_procesado_hasta"] = fin.isoformat()
         await browser.close()
 
     integrar_inteligencia_en_resultado(resultado)
@@ -151,6 +157,16 @@ async def ejecutar(inicio: date, fin: date, max_torneos: int, pausa: float) -> d
         resultado["error_global"] = (
             "No se detectó ningún torneo en el rango solicitado. "
             "Se detiene la ejecución para evitar un falso éxito sin datos."
+        )
+    elif resultado["resumen"]["torneos_guardados"] == 0:
+        resultado["error_global"] = (
+            "Se encontraron torneos, pero ninguno pudo guardarse en la base de datos. "
+            "Revisa la conexión PostgreSQL y los errores del diagnóstico."
+        )
+    elif resultado["resumen"]["limite_alcanzado"]:
+        resultado["error_global"] = (
+            f"Se alcanzó el límite de {max_torneos} torneos antes de completar el rango. "
+            "Aumenta el límite o divide el backfill en intervalos."
         )
     Path(SALIDA).mkdir(parents=True, exist_ok=True)
     Path(SALIDA, "backfill_historico.json").write_text(
@@ -167,7 +183,7 @@ async def main():
     fin = fecha_env("HISTORICAL_TO", hoy_praga - timedelta(days=1))
     if fin < inicio:
         raise SystemExit("HISTORICAL_TO debe ser igual o posterior a HISTORICAL_FROM")
-    max_torneos = int(os.getenv("MAX_HISTORICAL_TOURNAMENTS", "500"))
+    max_torneos = int(os.getenv("MAX_HISTORICAL_TOURNAMENTS", "5000"))
     pausa = float(os.getenv("HISTORICAL_PAUSE_SECONDS", "0.25"))
     resultado = await ejecutar(inicio, fin, max_torneos, pausa)
     print(json.dumps(resultado["resumen"], ensure_ascii=False))
