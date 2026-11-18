@@ -295,8 +295,33 @@ async def main():
         json.dump(resultado, f, ensure_ascii=False, indent=2)
 
     # Persistencia: PostgreSQL si DATABASE_URL existe; SQLite local para desarrollo.
-    guardado = HistoryDB().save_scrape(resultado)
+    history_db = HistoryDB()
+    guardado = history_db.save_scrape(resultado)
     print("Memoria histórica actualizada:", json.dumps(guardado, ensure_ascii=False))
+
+    # Ciclo de retroalimentación: liquidar pronósticos solo con marcadores
+    # completos observados después de la fecha en que fueron registrados.
+    from retroalimentacion import PredictionFeedback
+    feedback = PredictionFeedback(history_db)
+    liquidacion = feedback.settle_from_snapshots(history_db.listar_snapshots())
+    metricas = feedback.metrics()
+    print("Retroalimentación:", json.dumps(liquidacion, ensure_ascii=False))
+    print("Evaluación acumulada:", json.dumps(metricas, ensure_ascii=False))
+    with open(f"{SALIDA}/evaluacion_modelo.json", "w", encoding="utf-8") as f:
+        json.dump({"liquidacion": liquidacion, "metricas": metricas},
+                  f, ensure_ascii=False, indent=2)
+
+    # Perfiles descriptivos se recalculan desde cero con el histórico completo.
+    # No se usan como variables predictivas hasta superar pruebas walk-forward.
+    from radar_necesidad import acumular_radar_necesidad
+    from historial_rendimiento import acumular_historial_presion
+    snapshots = history_db.listar_snapshots()
+    for filename, report in (
+        ("radar_necesidad.json", acumular_radar_necesidad(snapshots)),
+        ("rendimiento_competitivo.json", acumular_historial_presion(snapshots)),
+    ):
+        with open(f"{SALIDA}/{filename}", "w", encoding="utf-8") as f:
+            json.dump(report, f, ensure_ascii=False, indent=2)
 
     with open(f"{SALIDA}/tablas.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
