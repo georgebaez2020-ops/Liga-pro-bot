@@ -175,7 +175,7 @@ def analizar_escenarios(clasificacion):
             min_place[row["jugador"]] = row["puesto_grupo"]
             max_place[row["jugador"]] = row["puesto_grupo"]
 
-    for mask in range(total):
+    for mask in (range(total) if pending or inconsistent else []):
         points = dict(base)
         for index, duel in enumerate(pending):
             winner = duel["jugador_a"] if (mask >> index) & 1 else duel["jugador_b"]
