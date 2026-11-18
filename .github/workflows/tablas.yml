@@ -8,7 +8,6 @@ on:
       - 'tablas_scraper.py'
       - 'analisis_jugadores.py'
       - 'test_analisis_jugadores.py'
-      - 'db.py'
       - 'requirements.txt'
       - '.github/workflows/tablas.yml'
   workflow_dispatch:
