@@ -1,0 +1,64 @@
+name: Validar estado Upcoming
+
+on:
+  push:
+    branches:
+      - feature/status-upcoming-live-finished
+    paths:
+      - '.github/workflows/validar-upcoming.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validar-upcoming:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/status-upcoming-live-finished
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar Playwright
+        run: |
+          pip install playwright
+          playwright install --with-deps chromium
+
+      - name: Extraer únicamente torneos Upcoming
+        env:
+          DIA: '2026-11-18'
+          STATUS: 'upcoming'
+          MAX_TORNEOS: '100'
+          MAX_PAGINAS: '10'
+        run: python tablas_scraper.py
+
+      - name: Verificar detección de Upcoming
+        run: |
+          python - <<'PY'
+          import json
+          with open('salida/tablas.json', encoding='utf-8') as f:
+              data = json.load(f)
+          resumen = data.get('resumen', {})
+          torneos = data.get('torneos', {})
+          print('Resumen:', json.dumps(resumen, ensure_ascii=False))
+          print('Torneos encontrados:', len(torneos))
+          for tid, torneo in torneos.items():
+              print(tid, torneo.get('estado'), torneo.get('texto_listado', '')[:180],
+                    'grupos:', torneo.get('grupos_completos', 0),
+                    'aviso:', torneo.get('aviso'))
+          assert resumen.get('upcoming', 0) > 0, 'No se detectaron torneos Upcoming reales'
+          assert resumen.get('live', 0) == 0, 'El filtro upcoming incluyó torneos Live'
+          assert resumen.get('finished', 0) == 0, 'El filtro upcoming incluyó torneos Finished'
+          PY
+
+      - name: Guardar evidencia de validación
+        uses: actions/upload-artifact@v4
+        with:
+          name: validacion-upcoming
+          path: salida/
+          retention-days: 7
