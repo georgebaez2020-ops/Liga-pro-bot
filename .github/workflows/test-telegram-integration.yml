@@ -1,0 +1,31 @@
+name: Telegram integration checks
+
+on:
+  push:
+    branches:
+      - integration/telegram-prediction-engine
+  pull_request:
+    branches:
+      - feature/status-upcoming-live-finished
+
+permissions:
+  contents: read
+
+jobs:
+  integration-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install project dependencies
+        run: pip install -r requirements.txt
+      - name: Compile Telegram integration
+        run: python -m py_compile bot_telegram.py servicio_pronosticos.py
+      - name: Test prediction service and feedback
+        run: |
+          python -m unittest -v \
+            test_servicio_pronosticos.py \
+            tests/test_motor_pronosticos.py \
+            tests/test_retroalimentacion.py
