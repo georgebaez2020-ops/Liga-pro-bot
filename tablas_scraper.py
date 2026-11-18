@@ -9,6 +9,8 @@ from zoneinfo import ZoneInfo
 
 from playwright.async_api import async_playwright
 
+from db import HistoryDB
+
 COL = ZoneInfo("America/Bogota")
 PRAGA = ZoneInfo("Europe/Prague")
 BASE = "https://tt.league-pro.com/en/tournaments"
@@ -251,6 +253,10 @@ async def main():
     os.makedirs(SALIDA, exist_ok=True)
     with open(f"{SALIDA}/tablas.json", "w", encoding="utf-8") as f:
         json.dump(resultado, f, ensure_ascii=False, indent=2)
+
+    # Persistencia: PostgreSQL si DATABASE_URL existe; SQLite local para desarrollo.
+    guardado = HistoryDB().save_scrape(resultado)
+    print("Memoria histórica actualizada:", json.dumps(guardado, ensure_ascii=False))
 
     with open(f"{SALIDA}/tablas.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
