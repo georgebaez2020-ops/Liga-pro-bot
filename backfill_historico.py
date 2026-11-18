@@ -51,6 +51,7 @@ async def descubrir_fecha(page, dia: date) -> list[dict]:
     """Enumera IDs de torneo en todas las páginas observadas para ese día."""
     pendientes = [url_lista_rango(dia, dia)]
     visitadas, encontrados = set(), {}
+    diagnosticos = []
     while pendientes and len(visitadas) < MAX_PAGINAS:
         url = pendientes.pop(0)
         if url in visitadas:
@@ -88,7 +89,7 @@ async def descubrir_fecha(page, dia: date) -> list[dict]:
         # Guarda evidencia de la página para poder ajustar el archivo sin confundir
         # el carrusel global de partidos en vivo con el listado histórico filtrado.
         if len(resultado_diag["candidatos_globales"]) or not items:
-            resultado.setdefault("diagnostico_listados", []).append(resultado_diag)
+            diagnosticos.append(resultado_diag)
         for item in items:
             tid = extraer_id_torneo(item.get("href", ""))
             if not tid:
@@ -105,7 +106,7 @@ async def descubrir_fecha(page, dia: date) -> list[dict]:
         for link in links:
             if link not in visitadas and link not in pendientes:
                 pendientes.append(link)
-    return list(encontrados.values())
+    return {"torneos": list(encontrados.values()), "diagnosticos": diagnosticos}
 
 
 async def ejecutar(inicio: date, fin: date, max_torneos: int, pausa: float) -> dict:
@@ -134,7 +135,11 @@ async def ejecutar(inicio: date, fin: date, max_torneos: int, pausa: float) -> d
         while dia <= fin and len(ids_vistos) < max_torneos:
             resultado["resumen"]["dias_consultados"] += 1
             try:
-                torneos = await descubrir_fecha(page, dia)
+                descubrimiento = await descubrir_fecha(page, dia)
+                torneos = descubrimiento["torneos"]
+                resultado.setdefault("diagnostico_listados", []).extend(
+                    descubrimiento["diagnosticos"]
+                )
             except Exception as exc:
                 resultado.setdefault("errores_listado", []).append({
                     "fecha": dia.isoformat(), "error": f"{type(exc).__name__}: {str(exc)[:200]}"
