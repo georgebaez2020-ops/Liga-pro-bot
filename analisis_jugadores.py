@@ -88,7 +88,10 @@ def analyze(data):
                     h = h2h[key]
                     h["jugador_a"], h["jugador_b"] = key
                     h["partidos"] += 1
-                    if sa[0] > sa[1]:
+                    # Las columnas A/B del H2H siguen el orden alfabético de la clave,
+                    # no necesariamente el orden de las filas originales del grupo.
+                    winner = name_a if sa[0] > sa[1] else name_b
+                    if winner == key[0]:
                         h["victorias_a"] += 1
                     else:
                         h["victorias_b"] += 1
