@@ -2,3 +2,4 @@ python-telegram-bot==21.7
 requests
 playwright
 python-telegram-bot[job-queue]
+psycopg[binary]==3.2.6
