@@ -1,0 +1,37 @@
+name: Generar informes del historico
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  historical-reports:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/status-upcoming-live-finished
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Instalar PostgreSQL driver
+        run: pip install "psycopg[binary]==3.2.6"
+      - name: Generar perfiles e informe de rendimiento
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          test -n "$DATABASE_URL" || (echo "Falta el secreto DATABASE_URL" && exit 1)
+          python perfil_jugadores.py
+          python historial_rendimiento.py
+      - name: Publicar informes como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: informes-historicos-liga-pro
+          path: |
+            salida/perfiles_jugadores.json
+            salida/rendimiento_historico.json
+          if-no-files-found: error
+          retention-days: 14
