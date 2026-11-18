@@ -70,7 +70,7 @@ def _player_key(name: str) -> str:
 
 
 def _score(value: Any):
-    match = re.fullmatch(r"\\s*(\\d+)\\s*:\\s*(\\d+)\\s*", str(value or ""))
+    match = re.fullmatch(r"\s*(\d+)\s*:\s*(\d+)\s*", str(value or ""))
     if not match:
         return None
     a, b = map(int, match.groups())
