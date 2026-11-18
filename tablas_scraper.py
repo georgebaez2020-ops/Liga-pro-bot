@@ -175,18 +175,22 @@ async def extraer(page, torneo):
     tid = torneo["id"]
     url = torneo["url"]
     await page.goto(url, wait_until="domcontentloaded", timeout=60000)
+    # La ficha puede tener calendario de partidos aunque todavía no publique
+    # grupos. Nunca salir antes de leer el contenido visible.
     try:
         await page.wait_for_selector(".c-tournament-group-item", timeout=15000)
     except Exception:
-        return {**torneo, "grupos": [], "aviso": "tabla no encontrada"}
+        pass
 
     filas = await page.evaluate(JS_FILAS)
     grupos = armar_grupos(filas)
-    # Conserva el texto visible de la ficha: incluye "Players" (Rating, +/-)
-    # y "Tournament games" (orden/hora y resultados). Se parseará sin
-    # sustituir los datos tabulares originales ni inventar coincidencias.
+    # "Players" y "Tournament games" también existen en torneos Upcoming.
     detalle_texto = await page.locator("body").inner_text()
     analisis_cronologico = []
+    partidos_ficha_sin_grupo = []
+    if not grupos:
+        extraido = parsear_detalle_oficial(detalle_texto, [])
+        partidos_ficha_sin_grupo = extraido["partidos"]
     for numero, grupo in enumerate(grupos, start=1):
         extraido = parsear_detalle_oficial(detalle_texto, grupo)
         partidos_grupo = [
@@ -210,6 +214,7 @@ async def extraer(page, torneo):
         "grupos": grupos,
         "detalle_texto": detalle_texto,
         "analisis_cronologico": analisis_cronologico,
+        "partidos_ficha": partidos_ficha_sin_grupo,
         "filas_leidas": len(filas),
         "grupos_completos": len(grupos),
         "aviso": None if grupos else "no se pudieron formar grupos completos de 4 o 5",
