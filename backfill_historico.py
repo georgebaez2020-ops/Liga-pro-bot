@@ -151,7 +151,7 @@ async def ejecutar(inicio: date, fin: date, max_torneos: int, pausa: float) -> d
 
 async def main():
     hoy_praga = datetime.now(PRAGA).date()
-    inicio = fecha_env("HISTORICAL_FROM", restar_meses(hoy_praga, 8))
+    inicio = fecha_env("HISTORICAL_FROM", restar_meses(hoy_praga, 12))
     fin = fecha_env("HISTORICAL_TO", hoy_praga - timedelta(days=1))
     if fin < inicio:
         raise SystemExit("HISTORICAL_TO debe ser igual o posterior a HISTORICAL_FROM")
