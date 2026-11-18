@@ -18,6 +18,8 @@ on:
       - 'rendimiento_presion.py'
       - 'test_rendimiento_presion.py'
       - 'tablas_scraper.py'
+      - 'reconstruccion_torneo.py'
+      - 'test_reconstruccion_torneo.py'
       - 'test_inteligencia_torneo.py'
       - 'requirements.txt'
       - '.github/workflows/test-memoria-historica.yml'
@@ -46,7 +48,8 @@ jobs:
             test_rendimiento_presion.py \
             test_historial_rendimiento.py \
             test_radar_necesidad.py \
-            test_perfil_jugadores.py
+            test_perfil_jugadores.py \
+            test_reconstruccion_torneo.py
 
   historical-reports:
     runs-on: ubuntu-latest
