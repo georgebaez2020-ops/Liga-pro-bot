@@ -238,6 +238,37 @@ def reconstruir_secuencia(jugadores, partidos, rating_torneo=None):
         "clasificacion_desempates_completa": bool(sequence) and not sequence[-1]["empates_no_resueltos"],
     }
 
+def _normalizar_tokens_nombre(nombre):
+    """Normaliza nombre completo o abreviado publicado en una tarjeta."""
+    import re
+    return re.findall(r"[a-z0-9]+", str(nombre or "").casefold())
+
+
+def _resolver_jugador_por_rating_y_nombre(rating, nombre_ficha, ratings):
+    """Resuelve ratings repetidos usando el nombre abreviado de la tarjeta.
+
+    Ejemplo: rating 639 puede pertenecer a Hrabec Jan y Blejchar Marek;
+    '(639) Hrabec J' identifica al primero por prefijos de tokens.
+    """
+    candidatos = ratings.get(str(rating), [])
+    tokens_ficha = _normalizar_tokens_nombre(nombre_ficha)
+    coincidentes = []
+    if tokens_ficha:
+        for candidato in candidatos:
+            tokens_completos = _normalizar_tokens_nombre(candidato)
+            if len(tokens_ficha) == len(tokens_completos) and all(
+                completo.startswith(abreviado)
+                for abreviado, completo in zip(tokens_ficha, tokens_completos)
+            ):
+                coincidentes.append(candidato)
+    if len(coincidentes) == 1:
+        return coincidentes[0]
+    # Conserva compatibilidad con fichas donde el rating ya es único.
+    if len(candidatos) == 1:
+        return candidatos[0]
+    return None
+
+
 def parsear_detalle_oficial(texto, grupo):
     """Lee tarjetas de partido multilínea del texto visible de la ficha oficial."""
     import re
@@ -350,9 +381,17 @@ def parsear_detalle_oficial(texto, grupo):
             warnings.append({"hora": hour, "motivo": "no se encontraron los ratings de ambos jugadores"})
             i = j + 1
             continue
-        a_list, b_list = ratings.get(r1.group(1), []), ratings.get(r2.group(1), [])
-        if len(a_list) != 1 or len(b_list) != 1 or a_list[0] == b_list[0]:
-            warnings.append({"hora": hour, "motivo": "rating no identifica jugadores de forma única"})
+        jugador_a = _resolver_jugador_por_rating_y_nombre(r1.group(1), name1, ratings)
+        jugador_b = _resolver_jugador_por_rating_y_nombre(r2.group(1), name2, ratings)
+        if not jugador_a or not jugador_b or jugador_a == jugador_b:
+            warnings.append({
+                "hora": hour,
+                "motivo": "rating y nombre abreviado no identifican jugadores de forma única",
+                "rating_a": r1.group(1), "nombre_a": name1,
+                "candidatos_a": ratings.get(r1.group(1), []),
+                "rating_b": r2.group(1), "nombre_b": name2,
+                "candidatos_b": ratings.get(r2.group(1), []),
+            })
             i = j + 4
             continue
         score = None
@@ -395,7 +434,7 @@ def parsear_detalle_oficial(texto, grupo):
             pass
         matches.append({
             "orden": len(matches) + 1, "hora": hour, "estado": status,
-            "jugador_a": a_list[0], "jugador_b": b_list[0],
+            "jugador_a": jugador_a, "jugador_b": jugador_b,
             "nombre_a_en_ficha": name1, "nombre_b_en_ficha": name2,
             "marcador_sets": score, "puntos_sets_a": puntos_sets_a,
             "puntos_sets_b": puntos_sets_b,
