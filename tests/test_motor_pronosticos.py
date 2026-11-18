@@ -25,12 +25,12 @@ class PredictionEngineTests(unittest.TestCase):
         ]
 
     def test_probabilities_sum_to_one_hundred(self):
-        result = pronosticar_partido(self.snapshots, "Ana", "Beto")
+        result = pronosticar_partido(self.snapshots, "Ana", "Beto", fecha_partido="2026-11-01T00:00:00+00:00")
         self.assertTrue(result["elegible"])
         self.assertAlmostEqual(result["probabilidad_a"] + result["probabilidad_b"], 100.0)
 
     def test_rejects_insufficient_history(self):
-        result = pronosticar_partido(self.snapshots[:2], "Ana", "Beto")
+        result = pronosticar_partido(self.snapshots[:2], "Ana", "Beto", fecha_partido="2026-11-01T00:00:00+00:00")
         self.assertFalse(result["elegible"])
         self.assertEqual(result["motivo"], "muestra_historica_insuficiente")
 
@@ -39,8 +39,13 @@ class PredictionEngineTests(unittest.TestCase):
         self.assertFalse(result["elegible"])
         self.assertEqual(result["motivo"], "solo_partidos_no_iniciados")
 
+    def test_requires_prediction_cutoff(self):
+        result = pronosticar_partido(self.snapshots, "Ana", "Beto")
+        self.assertFalse(result["elegible"])
+        self.assertEqual(result["motivo"], "fecha_partido_con_zona_horaria_requerida")
+
     def test_names_are_normalized(self):
-        result = pronosticar_partido(self.snapshots, " ANA ", "Beto")
+        result = pronosticar_partido(self.snapshots, " ANA ", "Beto", fecha_partido="2026-11-01T00:00:00+00:00")
         self.assertTrue(result["elegible"])
 
 
