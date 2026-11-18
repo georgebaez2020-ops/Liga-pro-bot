@@ -155,6 +155,9 @@ def parsear_detalle_oficial(texto, grupo):
                     games = section[i + 1]
                     final_rating = section[i + 2]
                     delta_text = section[i + 3]
+                    # La web puede separar el signo (+/-) y la cifra en dos líneas.
+                    if re.fullmatch(r"[+-]", delta_text) and i + 4 < len(section) and re.fullmatch(r"\d+", section[i + 4]):
+                        delta_text = delta_text + section[i + 4]
                     if re.fullmatch(r"\d+\s*\([^)]*\)", games) and re.fullmatch(r"\d+", final_rating) and re.fullmatch(r"[+-]\s*\d+", delta_text):
                         rating_data[name] = {
                             "rating_final": int(final_rating),
