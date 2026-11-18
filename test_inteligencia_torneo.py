@@ -108,6 +108,12 @@ class TournamentIntelligenceTests(unittest.TestCase):
         self.assertFalse(result["fase_final_disponible"])
         self.assertIn("puesto definitivo", result["advertencia_fase_final"])
 
+    def test_tournament_includes_competitive_pressure_proxy(self):
+        result = analizar_torneo({"id": "T2", "estado": "finished", "grupos": [grupo_cuatro()]})
+        proxy = result["grupos"][0]["rendimiento_presion"]
+        self.assertEqual(proxy["corte_reglamentario"], "top 2")
+        self.assertIn("jugadores", proxy)
+
 
 if __name__ == "__main__":
     unittest.main()
