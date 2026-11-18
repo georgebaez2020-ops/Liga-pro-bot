@@ -12,14 +12,14 @@ on:
         required: false
         default: ''
       status:
-        description: 'Número de status de la página (vacío = todos)'
+        description: 'Estados: all, live, upcoming, finished o combinación separada por comas'
         required: false
-        default: ''
+        default: 'all'
   schedule:
     - cron: '0 */6 * * *'
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: tablas-liga
@@ -28,9 +28,11 @@ concurrency:
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: feature/status-upcoming-live-finished
 
       - uses: actions/setup-python@v5
         with:
@@ -41,51 +43,29 @@ jobs:
           pip install playwright
           playwright install --with-deps chromium
 
-      - name: Extraer tablas
+      - name: Extraer torneos y tablas
         env:
           TORNEOS: ${{ inputs.torneos }}
           DIA: ${{ inputs.dia }}
-          STATUS: ${{ inputs.status }}
-        run: python bot_telegram.py
+          STATUS: ${{ inputs.status || 'all' }}
+          MAX_TORNEOS: '100'
+          MAX_PAGINAS: '10'
+        run: python tablas_scraper.py
 
-      - name: Enviar solo los mejores a Telegram
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      - name: Mostrar resumen
         run: |
-          python -c "
-          import json, os, urllib.request
-          try:
-              with open('salida/pronosticos.json') as f:
-                  datos = json.load(f)
-          except:
-              print('No hay pronosticos')
-              exit(0)
-          for p in datos.get('recomendados', [])[:5]:
-              msg = f\"✅ {p['partido']}\nGana: {p['favorito']} - {p['prob_modelo']}% \nCuota AiScore: {p['cuota']} - Valor: {p['valor']}%\"
-              url = f\"https://api.telegram.org/bot{os.environ['TELEGRAM_BOT_TOKEN']}/sendMessage\"
-              data = {'chat_id': os.environ['TELEGRAM_CHAT_ID'], 'text': msg}
-              req = urllib.request.Request(url, data=json.dumps(data).encode(), headers={'Content-Type': 'application/json'})
-              urllib.request.urlopen(req)
-          "
+          python - <<'PY'
+          import json
+          with open('salida/tablas.json', encoding='utf-8') as f:
+              data = json.load(f)
+          print(json.dumps(data.get('resumen', {}), ensure_ascii=False, indent=2))
+          print('Torneos guardados:', len(data.get('torneos', {})))
+          PY
 
-      - name: Guardar en la rama datos
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git fetch origin datos:datos 2>/dev/null || true
-          if git show-ref --verify --quiet refs/heads/datos; then
-            git checkout datos
-          else
-            git checkout --orphan datos
-            git rm -rf . > /dev/null 2>&1 || true
-          fi
-          mkdir -p data
-          cp salida/* data/
-          git add data
-          if git diff --cached --quiet; then
-            echo 'Sin cambios'
-          else
-            git commit -m 'Actualizar tablas'
-            git push origin datos
-          fi
+      - name: Guardar resultados de prueba
+        uses: actions/upload-artifact@v4
+        with:
+          name: tablas-liga-pro
+          path: salida/
+          if-no-files-found: warn
+          retention-days: 7
