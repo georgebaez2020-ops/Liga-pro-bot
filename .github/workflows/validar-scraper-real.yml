@@ -1,0 +1,71 @@
+name: Validar scraper con torneos reales
+
+on:
+  push:
+    branches:
+      - feature/status-upcoming-live-finished
+    paths:
+      - 'tablas_scraper.py'
+      - 'inteligencia_torneo.py'
+      - '.github/workflows/validar-scraper-real.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  scrape-real:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/status-upcoming-live-finished
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Instalar dependencias
+        run: |
+          pip install playwright "psycopg[binary]==3.2.6"
+          playwright install --with-deps chromium
+      - name: Ejecutar recolección real (sin base de datos de producción)
+        env:
+          DIA: '2026-11-18'
+          STATUS: 'all'
+          MAX_TORNEOS: '20'
+          MAX_PAGINAS: '3'
+          DB_PATH: 'salida/validacion.sqlite'
+        run: python tablas_scraper.py
+      - name: Validar estructura y análisis generado
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path("salida/tablas.json")
+          data = json.loads(path.read_text(encoding="utf-8"))
+          assert data.get("torneos") is not None, "Falta el mapa de torneos"
+          assert data.get("resumen_inteligencia") is not None, "No se ejecutó la inteligencia"
+          for tid, tournament in data["torneos"].items():
+              assert "inteligencia" in tournament or "inteligencia_error" in tournament, f"{tid}: sin resultado de análisis"
+          print(json.dumps({
+              "dia": data.get("dia_colombia"),
+              "torneos_extraidos": len(data["torneos"]),
+              "resumen_estados": data.get("resumen"),
+              "resumen_inteligencia": data.get("resumen_inteligencia"),
+              "ejemplos": [
+                  {"id": tid, "estado": t.get("estado"), "grupos": len(t.get("grupos", [])),
+                   "jugadores": sum(len(g) for g in t.get("grupos", [])),
+                   "analisis": bool(t.get("inteligencia"))}
+                  for tid, t in list(data["torneos"].items())[:5]
+              ]
+          }, ensure_ascii=False, indent=2))
+          PY
+      - name: Guardar datos de validación
+        uses: actions/upload-artifact@v4
+        with:
+          name: validacion-scraper-czech-liga-pro
+          path: |
+            salida/tablas.json
+            salida/tablas.csv
+            salida/debug_listado.json
+          if-no-files-found: warn
+          retention-days: 7
