@@ -20,6 +20,17 @@ class PlayerAnalysisTests(unittest.TestCase):
         a = next(p for p in result["jugadores"] if p["jugador"] == "A")
         self.assertEqual((a["victorias"], a["derrotas"]), (1, 0))
 
+    def test_h2h_wins_follow_sorted_player_labels(self):
+        # El grupo presenta primero a "Z", pero el H2H ordena A antes que Z.
+        data = {"torneos": {"T1": {"estado": "finished", "grupos": [[
+            {"jugador": "Z", "resultados": ["|||", "3 : 1"]},
+            {"jugador": "A", "resultados": ["1 : 3", "|||"]}
+        ]]}}}
+        result = analyze(data)
+        duel = result["enfrentamientos_directos"][0]
+        self.assertEqual((duel["jugador_a"], duel["jugador_b"]), ("A", "Z"))
+        self.assertEqual((duel["victorias_a"], duel["victorias_b"]), (0, 1))
+
     def test_live_tournament_is_excluded(self):
         data = {"torneos": {"T1": {"estado": "live", "grupos": [[
             {"jugador": "A", "rating": "700", "resultados": ["|||", "3 : 0"]},
