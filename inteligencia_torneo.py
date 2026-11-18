@@ -203,3 +203,31 @@ def analizar_torneo(torneo):
             "el puesto definitivo del torneo no se puede calcular."
         ),
     }
+
+
+
+def integrar_inteligencia_en_resultado(resultado):
+    """Añade el análisis de grupos a cada torneo extraído, sin alterar los datos fuente."""
+    resumen = {
+        "torneos_analizados": 0,
+        "grupos_analizados": 0,
+        "jugadores_analizados": 0,
+        "partidos_pendientes": 0,
+        "marcadores_inconsistentes": 0,
+        "errores": 0,
+    }
+    for torneo in resultado.get("torneos", {}).values():
+        try:
+            analisis = analizar_torneo(torneo)
+            torneo["inteligencia"] = analisis
+            resumen["torneos_analizados"] += 1
+            for grupo in analisis["grupos"]:
+                resumen["grupos_analizados"] += 1
+                resumen["jugadores_analizados"] += len(grupo["clasificacion"])
+                resumen["partidos_pendientes"] += len(grupo["partidos_pendientes"])
+                resumen["marcadores_inconsistentes"] += len(grupo["marcadores_inconsistentes"])
+        except Exception as exc:
+            torneo["inteligencia_error"] = f"{type(exc).__name__}: {str(exc)[:250]}"
+            resumen["errores"] += 1
+    resultado["resumen_inteligencia"] = resumen
+    return resultado
