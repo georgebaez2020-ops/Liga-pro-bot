@@ -47,7 +47,7 @@ class PredictionFeedbackTests(unittest.TestCase):
         ])
         self.assertEqual(before["liquidados"], 0)
         after = self.feedback.settle_from_snapshots([
-            snapshot("2026-11-20T09:00:00+00:00"),
+            snapshot("2026-11-20T09:00:00+00:00", score_a=""),
             snapshot("2026-11-20T12:30:00+00:00"),
         ])
         self.assertEqual(after["liquidados"], 1)
