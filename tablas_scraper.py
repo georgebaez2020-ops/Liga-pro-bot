@@ -181,9 +181,14 @@ async def extraer(page, torneo):
 
     filas = await page.evaluate(JS_FILAS)
     grupos = armar_grupos(filas)
+    # Conserva el texto visible de la ficha: incluye "Players" (Rating, +/-)
+    # y "Tournament games" (orden/hora y resultados). Se parseará sin
+    # sustituir los datos tabulares originales ni inventar coincidencias.
+    detalle_texto = await page.locator("body").inner_text()
     return {
         **torneo,
         "grupos": grupos,
+        "detalle_texto": detalle_texto,
         "filas_leidas": len(filas),
         "grupos_completos": len(grupos),
         "aviso": None if grupos else "no se pudieron formar grupos completos de 4 o 5",
