@@ -259,6 +259,10 @@ def analizar_torneo(torneo):
     resultado = []
     for numero, grupo in enumerate(torneo.get("grupos", []), 1):
         tabla = calcular_clasificacion(grupo)
+        # Importación local para evitar dependencia circular: el módulo proxy
+        # reutiliza las reglas de clasificación de este archivo.
+        from rendimiento_presion import analizar_rendimiento_presion
+        tabla["rendimiento_presion"] = analizar_rendimiento_presion(grupo)
         tabla["grupo"] = numero
         tabla["necesidades"] = [
             evaluar_necesidad_jugador(tabla, row["jugador"])
