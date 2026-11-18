@@ -8,7 +8,7 @@ from db import HistoryDB
 from historial_rendimiento import acumular_historial_presion
 from motor_pronosticos import pronosticar_partido
 from perfil_jugadores import construir_perfiles
-from radar_necesidad import acumular_radar_necesidad
+from radar_necesidad import acumular_radar_necesidad, clasificar_necesidad
 from retroalimentacion import PredictionFeedback
 
 
@@ -55,6 +55,31 @@ def listar_calendario(tournaments):
     return rows
 
 
+def _contexto_competitivo(game, tournament, snapshots):
+    context = {"necesidad_actual": {}, "respuesta_historica_necesidad": {}, "rendimiento_relevante": {}}
+    group_no = game.get("grupo")
+    groups = tournament.get("grupos") or []
+    try:
+        group = groups[int(group_no) - 1] if group_no is not None else []
+    except (ValueError, IndexError, TypeError):
+        group = []
+    names = {str(p.get("jugador") or "").strip().casefold(): i for i, p in enumerate(group)}
+    a, b = str(game.get("jugador_a") or "").strip(), str(game.get("jugador_b") or "").strip()
+    if a.casefold() in names and b.casefold() in names:
+        context["necesidad_actual"] = clasificar_necesidad(group, names[a.casefold()], names[b.casefold()])
+    need_rows = acumular_radar_necesidad(snapshots).get("jugadores", [])
+    pressure_rows = acumular_historial_presion(snapshots).get("jugadores", [])
+    for name in (a, b):
+        key = name.casefold()
+        need = next((r for r in need_rows if str(r.get("jugador") or "").casefold() == key), None)
+        pressure = next((r for r in pressure_rows if str(r.get("jugador") or "").casefold() == key), None)
+        if need:
+            context["respuesta_historica_necesidad"][name] = {k: need.get(k) for k in ("partidos_obligado_a_ganar", "victorias_obligado", "derrotas_obligado", "respuesta_cuando_obligado", "muestra_suficiente")}
+        if pressure:
+            context["rendimiento_relevante"][name] = {k: pressure.get(k) for k in ("partidos_relevantes", "victorias", "derrotas", "tasa_victoria", "muestra_suficiente")}
+    return context
+
+
 def analizar_calendario(db=None):
     db, snapshots, tournaments = cargar_estado(db)
     feedback = PredictionFeedback(db)
@@ -82,7 +107,8 @@ def analizar_calendario(db=None):
             )
         if forecast.get("elegible"):
             feedback.record(game, forecast, predicted_at=now)
-        reports.append({"partido": game, "pronostico": forecast})
+        context = _contexto_competitivo(game, tournaments.get(str(game.get("torneo_id")), {}), snapshots)
+        reports.append({"partido": game, "pronostico": forecast, "contexto": context})
     return {
         "torneos": len(tournaments),
         "partidos_calendario": len(calendar),
