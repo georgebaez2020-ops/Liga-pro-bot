@@ -12,7 +12,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes
 
 from servicio_pronosticos import (
     analizar_calendario, buscar_h2h, buscar_jugador, cargar_estado, informes,
-    listar_calendario,
+    listar_calendario, buscar_necesidad, buscar_rendimiento,
 )
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
@@ -129,6 +129,58 @@ async def jugador(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logging.exception("Error en /jugador")
         await _reply(update, f"Error consultando jugador: {type(exc).__name__}: {exc}")
 
+
+
+async def necesidad(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    name = " ".join(context.args).strip()
+    if not name:
+        await _reply(update, "Uso: /necesidad Nombre del jugador")
+        return
+    try:
+        rows = buscar_necesidad(name)
+        if not rows:
+            await _reply(update, f"No hay datos de necesidad competitiva para «{name}».")
+            return
+        lines = ["🧭 RADAR DE NECESIDAD COMPETITIVA"]
+        for row in rows:
+            lines.append(
+                f"{row['jugador']}\\nPartidos con necesidad: {row['partidos_con_necesidad']} | "
+                f"Obligado a ganar: {row['partidos_obligado_a_ganar']}\\n"
+                f"Victorias obligado: {row['victorias_obligado']} | "
+                f"Derrotas: {row['derrotas_obligado']}\\n"
+                f"Respuesta: {row['respuesta_cuando_obligado']} | "
+                f"Muestra suficiente: {'sí' if row['muestra_suficiente'] else 'no'}\\n"
+                f"{row['interpretacion']}"
+            )
+        await _reply(update, "\\n\\n".join(lines))
+    except Exception as exc:
+        logging.exception("Error en /necesidad")
+        await _reply(update, f"Error consultando radar: {type(exc).__name__}: {exc}")
+
+
+async def rendimiento(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    name = " ".join(context.args).strip()
+    if not name:
+        await _reply(update, "Uso: /rendimiento Nombre del jugador")
+        return
+    try:
+        rows = buscar_rendimiento(name)
+        if not rows:
+            await _reply(update, f"No hay partidos competitivamente relevantes registrados para «{name}».")
+            return
+        lines = ["🔥 RENDIMIENTO EN CONTEXTOS COMPETITIVOS"]
+        for row in rows:
+            lines.append(
+                f"{row['jugador']}\\nPartidos relevantes: {row['partidos_relevantes']} | "
+                f"Victorias: {row['victorias']} | Derrotas: {row['derrotas']}\\n"
+                f"Tasa de victoria: {row['tasa_victoria']} | "
+                f"Torneos con muestra: {row['torneos_con_muestra']}\\n"
+                f"{row['interpretacion']}"
+            )
+        await _reply(update, "\\n\\n".join(lines))
+    except Exception as exc:
+        logging.exception("Error en /rendimiento")
+        await _reply(update, f"Error consultando rendimiento: {type(exc).__name__}: {exc}")
 
 async def h2h(update: Update, context: ContextTypes.DEFAULT_TYPE):
     raw = " ".join(context.args)
