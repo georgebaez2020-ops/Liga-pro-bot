@@ -243,6 +243,20 @@ def parsear_detalle_oficial(texto, grupo):
     import re
 
     lines = [line.strip() for line in str(texto or "").replace("\u00a0", " ").splitlines() if line.strip()]
+    # Fecha oficial publicada en la sección Group (ej. 17 Nov 2026).
+    fecha_torneo = None
+    meses = {"jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
+             "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12}
+    for line in lines:
+        mfecha = re.fullmatch(r"(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{4})", line)
+        if mfecha and mfecha.group(2)[:3].lower() in meses:
+            from datetime import date
+            try:
+                fecha_torneo = date(int(mfecha.group(3)), meses[mfecha.group(2)[:3].lower()],
+                                    int(mfecha.group(1))).isoformat()
+                break
+            except ValueError:
+                pass
     ratings = {}
     for player in grupo:
         name = str(player.get("jugador") or "").strip()
@@ -298,7 +312,7 @@ def parsear_detalle_oficial(texto, grupo):
     try:
         start = next(i for i, line in enumerate(lines) if line.casefold() == "tournament games") + 1
     except StopIteration:
-        return {"partidos": [], "rating_por_jugador": rating_data,
+        return {"partidos": [], "fecha_torneo": fecha_torneo, "rating_por_jugador": rating_data,
                 "advertencias": [{"motivo": "no se encontró la sección Tournament games"}],
                 "fuente": "texto visible de la ficha oficial"}
 
@@ -391,8 +405,8 @@ def parsear_detalle_oficial(texto, grupo):
         })
         i = next_i
     return {
-        "partidos": matches, "rating_por_jugador": rating_data,
-        "advertencias": warnings,
+        "partidos": matches, "fecha_torneo": fecha_torneo, "rating_por_jugador": rating_data,
+        "advertencias": warnings + ([] if fecha_torneo else [{"motivo": "no se encontró fecha oficial del torneo"}]),
         "fuente": "texto visible de la ficha oficial; emparejamiento por rating",
     }
 
