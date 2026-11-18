@@ -109,7 +109,8 @@ Osvald P
         self.assertEqual(parsed["partidos"][0]["jugador_b"], "Hanel Patrik")
         self.assertEqual(parsed["partidos"][1]["jugador_a"], "Blejchar Marek")
         self.assertEqual(parsed["partidos"][1]["jugador_b"], "Osvald Petr")
-        self.assertFalse(parsed["advertencias"])
+        self.assertTrue(any("no se encontró fecha oficial" in x["motivo"] for x in parsed["advertencias"]))
+        self.assertFalse(any("jugador" in x["motivo"].lower() or "rating" in x["motivo"].lower() for x in parsed["advertencias"]))
 
     def test_keeps_ambiguous_abbreviated_names_unresolved(self):
         from reconstruccion_torneo import _resolver_jugador_por_rating_y_nombre
