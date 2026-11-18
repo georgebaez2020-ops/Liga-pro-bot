@@ -128,3 +128,17 @@ def buscar_h2h(nombre_a, nombre_b, db=None):
         if {row["jugador_a"].casefold(), row["jugador_b"].casefold()} == keys:
             return row
     return None
+
+
+def buscar_necesidad(nombre, db=None):
+    data = informes(db)["necesidad"]["jugadores"]
+    needle = " ".join(str(nombre or "").split()).casefold()
+    rows = [row for row in data if needle in row["jugador"].casefold()] if needle else []
+    return rows[:5]
+
+
+def buscar_rendimiento(nombre, db=None):
+    data = informes(db)["rendimiento"]["jugadores"]
+    needle = " ".join(str(nombre or "").split()).casefold()
+    rows = [row for row in data if needle in row["jugador"].casefold()] if needle else []
+    return rows[:5]
