@@ -224,7 +224,7 @@ async def extraer(page, torneo):
         partido["fecha"] = fecha_torneo
         partido["zona_horaria"] = "Europe/Prague" if fecha_torneo else None
         hora = partido.get("hora")
-        if fecha_torneo and isinstance(hora, str) and re.fullmatch(r"\\d{1,2}:\\d{2}", hora):
+        if fecha_torneo and isinstance(hora, str) and re.fullmatch(r"\d{1,2}:\d{2}", hora):
             try:
                 local = datetime.fromisoformat(f"{fecha_torneo}T{hora}").replace(tzinfo=PRAGA)
                 partido["scheduled_at"] = local.isoformat(timespec="minutes")
