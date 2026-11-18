@@ -10,7 +10,8 @@ from zoneinfo import ZoneInfo
 from playwright.async_api import async_playwright
 
 from db import HistoryDB
-from inteligencia_torneo import integrar_inteligencia_en_resultado\nfrom reconstruccion_torneo import parsear_detalle_oficial, reconstruir_secuencia
+from inteligencia_torneo import integrar_inteligencia_en_resultado
+from reconstruccion_torneo import parsear_detalle_oficial, reconstruir_secuencia
 
 COL = ZoneInfo("America/Bogota")
 PRAGA = ZoneInfo("Europe/Prague")
