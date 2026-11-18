@@ -41,6 +41,42 @@ class ReconstruccionTests(unittest.TestCase):
         self.assertEqual(report["partidos_reconstruidos"], 5)
         self.assertFalse(report["completa"])
 
+    def test_official_tiebreak_uses_game_point_difference_before_head_to_head(self):
+        from reconstruccion_torneo import _tabla_ordenada
+        names = ["A", "B", "C", "D"]
+        points = {"A": 4, "B": 4, "C": 2, "D": 2}
+        wins = {"A": 1, "B": 1, "C": 0, "D": 0}
+        losses = {"A": 1, "B": 1, "C": 2, "D": 2}
+        sets_for = {"A": 5, "B": 5, "C": 3, "D": 3}
+        sets_against = {"A": 5, "B": 5, "C": 6, "D": 6}
+        gp_for = {"A": 42, "B": 39, "C": 30, "D": 25}
+        gp_against = {"A": 40, "B": 41, "C": 40, "D": 45}
+        h2h = {frozenset(("A", "B")): "B"}
+        table, unresolved = _tabla_ordenada(
+            names, points, wins, losses, sets_for, sets_against,
+            gp_for, gp_against, h2h
+        )
+        self.assertEqual([r["jugador"] for r in table[:2]], ["A", "B"])
+        self.assertEqual(unresolved, [])
+
+    def test_does_not_apply_head_to_head_before_missing_game_point_criteria(self):
+        from reconstruccion_torneo import _tabla_ordenada
+        names = ["A", "B", "C", "D"]
+        points = {"A": 4, "B": 4, "C": 2, "D": 2}
+        wins = {"A": 1, "B": 1, "C": 0, "D": 0}
+        losses = {"A": 1, "B": 1, "C": 2, "D": 2}
+        sets_for = {"A": 5, "B": 5, "C": 3, "D": 3}
+        sets_against = {"A": 5, "B": 5, "C": 6, "D": 6}
+        gp_for = {"A": None, "B": None, "C": 30, "D": 25}
+        gp_against = {"A": None, "B": None, "C": 40, "D": 45}
+        h2h = {frozenset(("A", "B")): "B"}
+        table, unresolved = _tabla_ordenada(
+            names, points, wins, losses, sets_for, sets_against,
+            gp_for, gp_against, h2h
+        )
+        self.assertEqual({table[0]["jugador"], table[1]["jugador"]}, {"A", "B"})
+        self.assertTrue(any(set(x["jugadores"]) == {"A", "B"} for x in unresolved))
+
     def test_parses_multiline_official_finished_matches(self):
         group = [
             {"jugador": "Picek Petr", "rating": "614"},
