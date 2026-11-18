@@ -240,6 +240,15 @@ async def scrape_job(context: ContextTypes.DEFAULT_TYPE):
                 logging.error("Scraper terminó con código %s:\n%s", process.returncode, tail)
             else:
                 logging.info("Scraper actualizado correctamente:\n%s", tail)
+                try:
+                    from servicio_pronosticos import analizar_calendario
+                    result = analizar_calendario()
+                    logging.info("Ciclo predictivo: %s partidos analizados; %s pronósticos registrados; %s resultados liquidados.",
+                                 result["partidos_programados_analizados"],
+                                 result["pronosticos_registrados"],
+                                 result["liquidacion"]["liquidados"])
+                except Exception:
+                    logging.exception("Falló el ciclo predictivo posterior al scraper.")
         except asyncio.TimeoutError:
             logging.exception("Tiempo agotado en scraper.")
         except Exception:
