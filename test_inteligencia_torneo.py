@@ -2,7 +2,7 @@ import unittest
 
 from inteligencia_torneo import (
     analizar_torneo, calcular_clasificacion, calcular_partidos_pendientes,
-    evaluar_necesidad_jugador,
+    evaluar_necesidad_jugador, integrar_inteligencia_en_resultado,
 )
 
 
@@ -61,6 +61,27 @@ class TournamentIntelligenceTests(unittest.TestCase):
         self.assertEqual(len(pending["pendientes"]), 1)
         table = calcular_clasificacion(group)
         self.assertEqual(table["estado_clasificacion"], "provisional")
+
+    def test_scrape_integration_attaches_analysis_to_tournament(self):
+        data = {
+            "torneos": {
+                "123": {
+                    "id": "123", "estado": "finished",
+                    "grupos": [grupo_cuatro()],
+                },
+                "456": {
+                    "id": "456", "estado": "upcoming", "grupos": [],
+                },
+            }
+        }
+        integrated = integrar_inteligencia_en_resultado(data)
+        self.assertIn("inteligencia", integrated["torneos"]["123"])
+        self.assertEqual(
+            len(integrated["torneos"]["123"]["inteligencia"]["grupos"]), 1
+        )
+        self.assertIn("inteligencia", integrated["torneos"]["456"])
+        self.assertEqual(integrated["resumen_inteligencia"]["grupos_analizados"], 1)
+        self.assertEqual(integrated["resumen_inteligencia"]["jugadores_analizados"], 4)
 
     def test_tournament_output_does_not_claim_final_ranking(self):
         result = analizar_torneo({"id": "T1", "estado": "finished", "grupos": [grupo_cuatro()]})
