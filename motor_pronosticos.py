@@ -6,7 +6,6 @@ La probabilidad es una estimacion exploratoria hasta superar backtesting y calib
 """
 from __future__ import annotations
 
-import math
 import unicodedata
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -24,10 +23,6 @@ def _date(value):
     except (TypeError, ValueError):
         return None
 
-
-def _sigmoid(x):
-    x = max(-30.0, min(30.0, x))
-    return 1.0 / (1.0 + math.exp(-x))
 
 
 def construir_ratings_elo(snapshots, k_factor=24.0, initial_rating=1500.0):
@@ -110,13 +105,14 @@ def pronosticar_partido(snapshots, jugador_a, jugador_b, fecha_partido=None,
         return {"elegible": False, "motivo": "solo_partidos_no_iniciados"}
     matches = extraer_partidos_historicos(snapshots)
     cutoff = _date(fecha_partido)
-    if cutoff:
-        matches = [m for m in matches if not _date(m.get("fecha_captura")) or _date(m.get("fecha_captura")) < cutoff]
-    elo = construir_ratings_elo([{
-        "tournament_id": m["torneo_id"], "captured_at": m["fecha_captura"],
-        "payload": {"torneo": {"grupos": []}}
-    } for m in []])
-    # Entrenamiento temporal directo: no incluye partidos posteriores al corte.
+    if cutoff is None:
+        return {"elegible": False, "motivo": "fecha_partido_con_zona_horaria_requerida"}
+    matches = [
+        m for m in matches
+        if _date(m.get("fecha_captura")) is not None
+        and _date(m.get("fecha_captura")) < cutoff
+    ]
+    # Entrenamiento temporal directo: solo resultados observados antes del corte.
     ratings = defaultdict(lambda: 1500.0)
     counts = defaultdict(int)
     for m in matches:
@@ -180,7 +176,7 @@ def pronosticar_calendario(snapshots, partidos, minimo_partidos=5):
             continue
         result = pronosticar_partido(
             snapshots, match.get("jugador_a"), match.get("jugador_b"),
-            fecha_partido=match.get("fecha"), estado=status,
+            fecha_partido=match.get("fecha") or match.get("scheduled_at"), estado=status,
             minimo_partidos=minimo_partidos,
         )
         output.append({
