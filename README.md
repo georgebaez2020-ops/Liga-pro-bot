@@ -64,7 +64,9 @@ El servicio de Render existente arranca \`bot_telegram.py\`. El recolector y la 
 
 **Límites deliberados de esta primera versión:** el scraper actual extrae la tabla de grupos, no un registro estructurado de retiros, lesiones, descalificaciones, walkovers ni resultados de la fase final. Por eso el módulo no inventa esas circunstancias ni calcula un puesto definitivo del torneo. La clasificación se marca provisional mientras haya partidos pendientes o inconsistencias. Tampoco presenta el objetivo actual como una clasificación matemática asegurada.
 
-Pruebas del módulo:
+El recolector ejecuta `integrar_inteligencia_en_resultado` después de extraer los torneos y antes de guardar en JSON/CSV y memoria histórica. Cada torneo incluye `inteligencia` con clasificación, partidos pendientes, inconsistencias y objetivos reglamentarios; `resumen_inteligencia` agrega conteos del ciclo. Si un torneo no tiene grupos (por ejemplo, Upcoming), se conserva con un análisis vacío. Los errores de análisis se registran en `inteligencia_error` sin detener toda la recolección.
+
+Pruebas del módulo e integración:
 
 ```bash
 python -m unittest test_inteligencia_torneo.py
