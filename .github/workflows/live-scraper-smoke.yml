@@ -26,7 +26,7 @@ jobs:
         run: python -m py_compile tablas_scraper.py reconstruccion_torneo.py servicio_pronosticos.py
       - name: Scrape current Colombia date from official league site
         env:
-          MAX_TORNEOS: '5'
+          MAX_TORNEOS: '30'
           MAX_PAGINAS: '2'
           STATUS: all
         run: python tablas_scraper.py
@@ -48,6 +48,22 @@ jobs:
           print("Resumen:", data.get("resumen"))
           print("Torneos:", len(tournaments))
           print("Partidos con horario verificable:", len(scheduled))
+          for tid, tournament in tournaments.items():
+              matches = tournament.get("partidos", [])
+              planned = [m for m in matches if m.get("estado") in ("planned", "upcoming")]
+              print({
+                  "torneo": tid,
+                  "estado": tournament.get("estado"),
+                  "fecha_torneo": tournament.get("fecha_torneo"),
+                  "partidos": len(matches),
+                  "programados": len(planned),
+                  "horas_detectadas": [m.get("hora") for m in planned[:8]],
+                  "fechas_programadas": [m.get("fecha") for m in planned[:8]],
+              })
+              lines = (tournament.get("detalle_texto") or "").splitlines()
+              for i, line in enumerate(lines):
+                  if line.strip().casefold() in ("group", "tournament games"):
+                      print("SECCION", tid, lines[i:i+14])
           if errors:
               raise SystemExit(f"Errores al extraer fichas: {errors}")
           if not tournaments:
