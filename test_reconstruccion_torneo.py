@@ -1,5 +1,5 @@
 import unittest
-from reconstruccion_torneo import (\n    consolidar_partidos_torneo, parsear_detalle_oficial, reconstruir_secuencia,\n)
+from reconstruccion_torneo import consolidar_partidos_torneo, parsear_detalle_oficial, reconstruir_secuencia
 
 
 class ReconstruccionTests(unittest.TestCase):
