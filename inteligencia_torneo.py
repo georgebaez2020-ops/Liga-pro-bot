@@ -141,7 +141,7 @@ def calcular_clasificacion(grupo):
         if base_key(a) == base_key(b) and _head_to_head(grupo, a["jugador"], b["jugador"]) is None:
             unresolved.append([a["jugador"], b["jugador"]])
 
-    return {
+    resultado = {
         "formato": size,
         "clasificacion": rows,
         "partidos_pendientes": pending["pendientes"],
@@ -150,6 +150,72 @@ def calcular_clasificacion(grupo):
         "estado_clasificacion": "provisional" if pending["pendientes"] or pending["inconsistentes"] else "completa",
         "nota": "Los retiros, lesiones, descalificaciones y walkovers no se deducen de celdas vacías.",
     }
+    resultado["escenarios"] = analizar_escenarios(resultado)
+    return resultado
+
+
+def analizar_escenarios(clasificacion):
+    """Enumera resultados W/L de duelos pendientes y estima rangos de puesto.
+
+    Los escenarios usan puntos reglamentarios (2/1). Si hay empate en puntos,
+    devuelven un rango de puestos porque los desempates futuros dependen de
+    sets/puntos que todavía no existen. No inventa marcadores de sets.
+    """
+    rows = clasificacion["clasificacion"]
+    pending = clasificacion.get("partidos_pendientes", [])
+    inconsistent = clasificacion.get("marcadores_inconsistentes", [])
+    names = [row["jugador"] for row in rows]
+    base = {row["jugador"]: row["puntos_reglamento"] for row in rows}
+    min_place = {name: len(rows) for name in names}
+    max_place = {name: 1 for name in names}
+    total = 1 << len(pending)
+
+    for mask in range(total):
+        points = dict(base)
+        for index, duel in enumerate(pending):
+            winner = duel["jugador_a"] if (mask >> index) & 1 else duel["jugador_b"]
+            loser = duel["jugador_b"] if winner == duel["jugador_a"] else duel["jugador_a"]
+            points[winner] += 2
+            points[loser] += 1
+
+        ordered = sorted(names, key=lambda name: points[name], reverse=True)
+        start = 0
+        while start < len(ordered):
+            end = start + 1
+            while end < len(ordered) and points[ordered[end]] == points[ordered[start]]:
+                end += 1
+            for name in ordered[start:end]:
+                min_place[name] = min(min_place[name], start + 1)
+                max_place[name] = max(max_place[name], end)
+            start = end
+
+    escenarios = {}
+    cutoff_fase = 4 if len(rows) == 5 else 2
+    for name in names:
+        low, high = min_place[name], max_place[name]
+        escenarios[name] = {
+            "puesto_minimo_posible": low,
+            "puesto_maximo_posible": high,
+            "puede_top_2": low <= 2,
+            "asegura_top_2_por_puntos": high <= 2,
+            "puede_fase_final": low <= cutoff_fase,
+            "asegura_fase_final_por_puntos": high <= cutoff_fase,
+        }
+
+    return {
+        "escenarios_evaluados": total,
+        "duelos_pendientes_modelados": len(pending),
+        "marcadores_inconsistentes_excluidos": len(inconsistent),
+        "escenarios_completos": not inconsistent,
+        "metodo": "enumeración de victorias/derrotas; empates por puntos expresados como rango",
+        "advertencia": (
+            "Los rangos son por puntos. Sets ganados, diferencia de sets, "
+            "diferencia de puntos, puntos anotados y H2H pueden modificar "
+            "el orden final; no se simulan marcadores futuros."
+        ),
+        "jugadores": escenarios,
+    }
+
 
 
 def evaluar_necesidad_jugador(clasificacion, jugador):
