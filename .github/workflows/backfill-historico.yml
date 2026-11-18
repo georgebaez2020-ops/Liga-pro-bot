@@ -98,8 +98,8 @@ jobs:
           data["verificacion_postgres"] = verificacion
           ruta.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
           print(json.dumps(verificacion, ensure_ascii=False))
-          if torneos == 0 or snapshots == 0:
-              raise SystemExit("PostgreSQL no contiene snapshots históricos en el rango solicitado")
+          if torneos == 0 or snapshots == 0 or partidos == 0:
+              raise SystemExit("PostgreSQL no contiene torneos, snapshots y partidos históricos en el rango solicitado")
           PY
       - name: Publicar diagnóstico
         if: always()
