@@ -50,6 +50,17 @@ class HistoryDBTests(unittest.TestCase):
             self.assertEqual(conn.execute("SELECT COUNT(*) FROM players").fetchone()[0], 2)
             self.assertEqual(conn.execute("SELECT COUNT(*) FROM matches").fetchone()[0], 1)
 
+    def test_listar_snapshots_returns_chronological_payloads(self):
+        first = self.sample()
+        self.db.save_scrape(first)
+        later = self.sample()
+        later["generado"] = "2026-11-18T08:10:00-05:00"
+        self.db.save_scrape(later)
+        snapshots = self.db.listar_snapshots()
+        self.assertEqual(len(snapshots), 2)
+        self.assertLess(snapshots[0]["captured_at"], snapshots[1]["captured_at"])
+        self.assertEqual(snapshots[0]["payload"]["estado"], "upcoming")
+
     def test_duplicate_snapshot_does_not_duplicate_records(self):
         data = self.sample()
         self.db.save_scrape(data)
