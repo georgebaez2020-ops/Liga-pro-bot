@@ -8,6 +8,8 @@ on:
       - 'db.py'
       - 'test_db.py'
       - 'test_analisis_jugadores.py'
+      - 'inteligencia_torneo.py'
+      - 'test_inteligencia_torneo.py'
       - 'requirements.txt'
       - '.github/workflows/test-memoria-historica.yml'
 
@@ -27,4 +29,4 @@ jobs:
       - name: Instalar dependencias de base de datos
         run: pip install "psycopg[binary]==3.2.6"
       - name: Ejecutar pruebas
-        run: python -m unittest -v test_analisis_jugadores.py test_db.py
+        run: python -m unittest -v test_analisis_jugadores.py test_db.py test_inteligencia_torneo.py
