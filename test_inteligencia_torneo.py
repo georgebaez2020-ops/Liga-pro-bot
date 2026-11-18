@@ -83,6 +83,26 @@ class TournamentIntelligenceTests(unittest.TestCase):
         self.assertEqual(integrated["resumen_inteligencia"]["grupos_analizados"], 1)
         self.assertEqual(integrated["resumen_inteligencia"]["jugadores_analizados"], 4)
 
+    def test_scenarios_enumerate_pending_match_without_inventing_tie_breaks(self):
+        group = grupo_cuatro()
+        group[0]["resultados"][1] = ""
+        group[1]["resultados"][0] = ""
+        table = calcular_clasificacion(group)
+        scenarios = table["escenarios"]
+        self.assertEqual(scenarios["escenarios_evaluados"], 2)
+        self.assertEqual(scenarios["duelos_pendientes_modelados"], 1)
+        self.assertTrue(scenarios["escenarios_completos"])
+        self.assertIn("rangos son por puntos", scenarios["advertencia"])
+        self.assertIn("puesto_minimo_posible", scenarios["jugadores"]["A"])
+
+    def test_inconsistent_match_marks_scenarios_incomplete(self):
+        group = grupo_cuatro()
+        group[0]["resultados"][1] = "3:0"
+        group[1]["resultados"][0] = "3:0"
+        table = calcular_clasificacion(group)
+        self.assertEqual(table["escenarios"]["marcadores_inconsistentes_excluidos"], 1)
+        self.assertFalse(table["escenarios"]["escenarios_completos"])
+
     def test_tournament_output_does_not_claim_final_ranking(self):
         result = analizar_torneo({"id": "T1", "estado": "finished", "grupos": [grupo_cuatro()]})
         self.assertFalse(result["fase_final_disponible"])
