@@ -251,8 +251,8 @@ def parsear_detalle_oficial(texto, grupo):
             ratings.setdefault(rating, []).append(name)
 
     rating_data = {}
-    # El bloque Players puede aparecer incluso antes de que exista una tabla
-    # de grupos. Delimitarlo por Group o Tournament games, según la ficha.
+    # El bloque Players puede aparecer antes de Group o directamente antes
+    # de Tournament games en fichas Upcoming sin tabla.
     try:
         p_start = next(i for i, line in enumerate(lines) if line.casefold() == "players")
         section_end = next(
@@ -260,33 +260,36 @@ def parsear_detalle_oficial(texto, grupo):
             if lines[i].casefold() in {"group", "tournament games"}
         )
         section = lines[p_start + 1:section_end]
-        # Cada registro oficial contiene: nombre, partidos (W-L), rating y delta.
-        # El signo y la cifra del delta pueden venir en una sola línea o separadas.
-        for i in range(1, len(section) - 2):
-            games, final_rating, delta_text = section[i:i + 3]
-            if not re.fullmatch(r"\\d+\\s*\\([^)]*\\)", games):
+        ignored = {"#", "player", "games", "rating", "+/-", "-", "—"}
+        for i, line in enumerate(section):
+            if not re.fullmatch(r"\\d+\\s*\\([^)]*\\)", line):
                 continue
-            if not re.fullmatch(r"\\d+", final_rating):
+            if i + 2 >= len(section) or not re.fullmatch(r"\\d+", section[i + 1]):
                 continue
+            delta_text = section[i + 2]
             if re.fullmatch(r"[+-]", delta_text) and i + 3 < len(section) and re.fullmatch(r"\\d+", section[i + 3]):
                 delta_text += section[i + 3]
             if not re.fullmatch(r"[+-]\\s*\\d+", delta_text):
                 continue
-            name = section[i - 1].strip()
-            if not name or name.casefold() in {"#", "player", "games", "rating", "+/-", "-"}:
+            # El nombre es la línea útil inmediatamente anterior a GAMES;
+            # se ignoran separadores gráficos y encabezados de tabla.
+            name = next(
+                (section[k].strip() for k in range(i - 1, -1, -1)
+                 if section[k].strip().casefold() not in ignored),
+                ""
+            )
+            if not name:
                 continue
-            # Con grupos, conservar el nombre tabular como autoridad y no
-            # agregar entradas duplicadas. Sin grupos, roster procede de Players.
             matching = [p for p in grupo if str(p.get("jugador") or "").strip().casefold() == name.casefold()]
             if grupo and not matching:
                 continue
             canonical = matching[0]["jugador"] if matching else name
-            rating = str(int(final_rating))
+            rating = str(int(section[i + 1]))
             ratings.setdefault(rating, [])
             if canonical not in ratings[rating]:
                 ratings[rating].append(canonical)
             rating_data[canonical] = {
-                "rating_final": int(final_rating),
+                "rating_final": int(section[i + 1]),
                 "variacion": int(re.sub(r"\\s", "", delta_text)),
             }
     except StopIteration:
