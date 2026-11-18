@@ -51,3 +51,5 @@ class PlayerProfileTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+# CI trigger: execute historical profile unit tests on the development branch.
