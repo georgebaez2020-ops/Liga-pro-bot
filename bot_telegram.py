@@ -102,6 +102,26 @@ async def pronosticos(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 lines.append(f"✅ {pair}: {forecast['favorito']} ({forecast['probabilidad_a']}% / {forecast['probabilidad_b']}%). Confianza {forecast['nivel_confianza']}.")
             else:
                 lines.append(f"⏸️ {pair}: sin pronóstico — {forecast.get('motivo','no elegible')}.")
+            if forecast.get("elegible"):
+                lines.append(
+                    f"   Forma últimos 10: {forecast.get('jugador_a')} "
+                    f"{forecast.get('forma_ultimos_10_a', {}).get('victorias', 0)}/"
+                    f"{forecast.get('forma_ultimos_10_a', {}).get('partidos', 0)} — "
+                    f"{forecast.get('jugador_b')} "
+                    f"{forecast.get('forma_ultimos_10_b', {}).get('victorias', 0)}/"
+                    f"{forecast.get('forma_ultimos_10_b', {}).get('partidos', 0)}"
+                )
+            context = item.get("contexto") or {}
+            for player, detail in context.get("necesidad_actual", {}).items():
+                lines.append(f"   Necesidad actual {player}: {detail.get('necesidad_fase_final', 'sin dato')}.")
+            for player, detail in context.get("respuesta_historica_necesidad", {}).items():
+                sample = detail.get("partidos_obligado_a_ganar", 0)
+                if sample:
+                    lines.append(f"   Historial obligado {player}: {detail.get('victorias_obligado', 0)}V/{detail.get('derrotas_obligado', 0)}D en {sample} partidos.")
+            for player, detail in context.get("rendimiento_relevante", {}).items():
+                sample = detail.get("partidos_relevantes", 0)
+                if sample:
+                    lines.append(f"   Partidos relevantes {player}: {detail.get('victorias', 0)}V/{detail.get('derrotas', 0)}D en {sample} partidos.")
         lines.append("\nEl bot se abstiene si falta histórico suficiente o una fecha/hora verificable.")
         await _reply(update, "\n".join(lines))
     except Exception as exc:
