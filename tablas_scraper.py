@@ -35,24 +35,15 @@ JS_FILAS = r"""
 # En el listado, conserva el texto de la fila contenedora para leer el estado
 # que muestra la propia web. No se asignan códigos numéricos supuestos.
 JS_TORNEOS = r"""
-() => {
-  const links = Array.from(document.querySelectorAll('a[href*="/en/tournaments/"]'));
-  return links.map(a => {
-    const ancestors = [];
-    let node = a;
-    for (let i = 0; i < 7 && node; i++, node = node.parentElement) {
-      const txt = (node.innerText || node.textContent || '').trim().replace(/\s+/g, ' ');
-      ancestors.push({
-        level: i,
-        tag: node.tagName,
-        className: typeof node.className === 'string' ? node.className : '',
-        text: txt.slice(0, 900),
-        html: i < 4 ? node.outerHTML.slice(0, 1800) : ''
-      });
-    }
-    return {href: a.href, anchorText: (a.innerText || a.textContent || '').trim(), ancestors};
-  });
-}
+() => Array.from(document.querySelectorAll('a[href*="/en/tournaments/"]')).map(a => {
+  const card = a.closest(".c-tournament-item") || a.closest(".c-live-matches-item") || a;
+  return {
+    href: a.href,
+    text: (card.innerText || card.textContent || "").trim(),
+    className: typeof card.className === "string" ? card.className : "",
+    linkClass: typeof a.className === "string" ? a.className : ""
+  };
+})
 """
 
 
@@ -64,15 +55,17 @@ def url_lista(dia_col):
     return f"{BASE}?date_from={inicio}&date_to={fin}"
 
 
-def normalizar_estado(texto):
+def normalizar_estado(texto, clase=""):
+    """Clasifica usando la tarjeta concreta, no texto de contenedores globales."""
+    clase = (clase or "").lower()
     texto = (texto or "").lower()
+    if "c-live-matches-item" in clase or "c-live-matches-item" in (clase or "").lower():
+        return "live"
     coincidencias = {
         estado for estado, etiquetas in ETIQUETAS_ESTADO.items()
-        if any(re.search(rf"\b{re.escape(etiqueta)}\b", texto) for etiqueta in etiquetas)
+        if any(re.search(rf"\\b{re.escape(etiqueta)}\\b", texto) for etiqueta in etiquetas)
     }
-    # Si el texto heredado contiene más de una etiqueta, no adivinar.
     return coincidencias.pop() if len(coincidencias) == 1 else "unknown"
-
 
 def armar_grupos(filas):
     """
@@ -150,15 +143,16 @@ async def descubrir(page, dia_col, estados_solicitados):
             if not match:
                 continue
             tid = match.group(1)
-            estado = normalizar_estado(item.get("text", ""))
+            estado = normalizar_estado(item.get("text", ""), item.get("className", ""))
             # Con filtros concretos también conservamos los "unknown" para inspección:
             # es preferible revisar un torneo que descartarlo silenciosamente.
             if estados_solicitados == {"all"} or estado in estados_solicitados or estado == "unknown":
                 encontrados[tid] = {
                     "id": tid,
                     "estado": estado,
-                    "url": urljoin(BASE + "/", href),
+                    "url": f"{BASE}/{tid}",
                     "texto_listado": item.get("text", "")[:500],
+                    "clase_tarjeta": item.get("className", ""),
                 }
 
         # La web puede mostrar paginación numerada. Se recorren enlaces
