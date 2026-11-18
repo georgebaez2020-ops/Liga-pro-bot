@@ -38,6 +38,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/calendario — partidos programados y en vivo\n"
         "/pronosticos — análisis conservador de próximos partidos\n"
         "/jugador NOMBRE — histórico de un jugador\n"
+        "/necesidad NOMBRE — respuesta histórica cuando debía ganar\\n"
+        "/rendimiento NOMBRE — partidos competitivamente relevantes\\n"
         "/h2h JUGADOR 1 | JUGADOR 2 — enfrentamientos directos\n"
         "/evaluacion — métricas de aciertos y calibración\n"
         "/test — comprobar conexión")
