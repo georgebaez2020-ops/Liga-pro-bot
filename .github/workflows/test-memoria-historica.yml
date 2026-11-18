@@ -44,3 +44,32 @@ jobs:
             test_rendimiento_presion.py \
             test_historial_rendimiento.py \
             test_perfil_jugadores.py
+
+  historical-reports:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/status-upcoming-live-finished
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Instalar PostgreSQL driver
+        run: pip install "psycopg[binary]==3.2.6"
+      - name: Generar informes históricos (solo lectura de PostgreSQL)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          test -n "$DATABASE_URL" || (echo "Falta el secreto DATABASE_URL" && exit 1)
+          python perfil_jugadores.py
+          python historial_rendimiento.py
+      - name: Publicar informes
+        uses: actions/upload-artifact@v4
+        with:
+          name: informes-historicos-liga-pro
+          path: |
+            salida/perfiles_jugadores.json
+            salida/rendimiento_historico.json
+          if-no-files-found: error
+          retention-days: 14
