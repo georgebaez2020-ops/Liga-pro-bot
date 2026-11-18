@@ -1,6 +1,7 @@
 name: Tablas Liga Pro
 
 on:
+  # Ejecución exclusivamente manual mientras se valida el scraper.
   workflow_dispatch:
     inputs:
       torneos:
@@ -15,8 +16,6 @@ on:
         description: 'Estados: all, live, upcoming, finished o combinación separada por comas'
         required: false
         default: 'all'
-  schedule:
-    - cron: '0 */6 * * *'
 
 permissions:
   contents: read
