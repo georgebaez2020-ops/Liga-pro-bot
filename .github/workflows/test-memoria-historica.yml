@@ -6,11 +6,13 @@ on:
       - feature/status-upcoming-live-finished
     paths:
       - 'db.py'
+      - 'historial_rendimiento.py'
+      - 'test_historial_rendimiento.py'
       - 'test_db.py'
       - 'test_analisis_jugadores.py'
       - 'inteligencia_torneo.py'
       - 'rendimiento_presion.py'
-      - 'test_rendimiento_presion.py'
+      - 'test_rendimiento_presion.py test_historial_rendimiento.py'
       - 'tablas_scraper.py'
       - 'test_inteligencia_torneo.py'
       - 'requirements.txt'
