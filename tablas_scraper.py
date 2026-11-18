@@ -63,7 +63,7 @@ def normalizar_estado(texto, clase=""):
         return "live"
     coincidencias = {
         estado for estado, etiquetas in ETIQUETAS_ESTADO.items()
-        if any(re.search(rf"\\b{re.escape(etiqueta)}\\b", texto) for etiqueta in etiquetas)
+        if any(re.search(rf"\b{re.escape(etiqueta)}\b", texto) for etiqueta in etiquetas)
     }
     return coincidencias.pop() if len(coincidencias) == 1 else "unknown"
 
