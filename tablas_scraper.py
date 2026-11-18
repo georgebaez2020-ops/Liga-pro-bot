@@ -38,18 +38,19 @@ JS_TORNEOS = r"""
 () => {
   const links = Array.from(document.querySelectorAll('a[href*="/en/tournaments/"]'));
   return links.map(a => {
+    const ancestors = [];
     let node = a;
-    let rowText = a.innerText || a.textContent || '';
-    for (let i = 0; i < 7 && node.parentElement; i++) {
-      node = node.parentElement;
-      const txt = (node.innerText || node.textContent || '').trim();
-      if (/\b(live|upcoming|finished|in progress)\b/i.test(txt)) {
-        rowText = txt;
-        break;
-      }
-      if (txt.length > rowText.length) rowText = txt;
+    for (let i = 0; i < 7 && node; i++, node = node.parentElement) {
+      const txt = (node.innerText || node.textContent || '').trim().replace(/\s+/g, ' ');
+      ancestors.push({
+        level: i,
+        tag: node.tagName,
+        className: typeof node.className === 'string' ? node.className : '',
+        text: txt.slice(0, 900),
+        html: i < 4 ? node.outerHTML.slice(0, 1800) : ''
+      });
     }
-    return {href: a.href, text: rowText};
+    return {href: a.href, anchorText: (a.innerText || a.textContent || '').trim(), ancestors};
   });
 }
 """
@@ -139,6 +140,10 @@ async def descubrir(page, dia_col, estados_solicitados):
         await page.wait_for_timeout(1200)
 
         filas = await page.evaluate(JS_TORNEOS)
+        # Diagnóstico temporal: estructura real de tarjetas y etiquetas visibles.
+        os.makedirs(SALIDA, exist_ok=True)
+        with open(f"{SALIDA}/debug_listado.json", "w", encoding="utf-8") as debug_file:
+            json.dump(filas, debug_file, ensure_ascii=False, indent=2)
         for item in filas:
             href = item.get("href", "")
             match = re.search(r"/en/tournaments/(\d+)", href)
