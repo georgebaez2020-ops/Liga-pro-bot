@@ -76,3 +76,15 @@ python -m unittest test_inteligencia_torneo.py
 ### Rendimiento en partidos potencialmente decisivos
 
 El análisis incorpora un proxy descriptivo de resultados en partidos cuyo desenlace podía mover al jugador a través del corte competitivo (top 2 en grupos de 4; top 4 en grupos de 5). Se reconstruye la tabla previa retirando temporalmente el duelo y evaluando los escenarios restantes por puntos. No es una medición psicológica de presión ni de puntos decisivos: la fuente actual no entrega secuencias de puntos por set. La tasa se muestra como exploratoria y no se considera muestra suficiente antes de 10 partidos relevantes.
+
+### Acumulado histórico entre torneos
+
+El módulo `historial_rendimiento.py` compara snapshots cronológicos y solo atribuye un partido al contexto competitivo cuando su marcador aparece después de una captura previa comparable. Los resultados que ya estaban presentes en la primera captura se excluyen porque no se conoce la tabla previa. Las métricas se agregan por jugador entre torneos, con número de partidos, victorias, derrotas, tasa y cantidad de torneos con muestra.
+
+Para generar el informe desde la base de datos configurada:
+
+```bash
+python historial_rendimiento.py
+```
+
+Genera `salida/rendimiento_historico.json`. Se necesitan capturas repetidas mientras los torneos avanzan; una sola captura final no permite reconstruir el contexto previo. Los partidos que aparecen por primera vez en una misma captura comparten el último contexto previo observado. El análisis sigue siendo un proxy competitivo, no una medición psicológica.
