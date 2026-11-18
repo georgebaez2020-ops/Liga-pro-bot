@@ -31,13 +31,21 @@ def cargar_estado(db=None):
 def listar_calendario(tournaments):
     rows = []
     for tid, tournament in tournaments.items():
-        games = tournament.get("partidos_programados") or []
+        games = list(tournament.get("partidos_programados") or [])
+        games.extend(tournament.get("partidos_en_vivo") or [])
         if not games:
             games = [
                 p for p in tournament.get("partidos") or []
                 if str(p.get("estado") or "").casefold() in {"planned", "upcoming", "live"}
             ]
+        seen = set()
         for game in games:
+            identity = (str(game.get("grupo") or ""), str(game.get("orden") or ""),
+                        str(game.get("jugador_a") or ""), str(game.get("jugador_b") or ""),
+                        str(game.get("hora") or ""))
+            if identity in seen:
+                continue
+            seen.add(identity)
             rows.append({
                 **game,
                 "torneo_id": tid,
