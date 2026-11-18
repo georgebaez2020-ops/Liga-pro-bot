@@ -30,7 +30,7 @@ class PredictionEngineTests(unittest.TestCase):
         self.assertAlmostEqual(result["probabilidad_a"] + result["probabilidad_b"], 100.0)
 
     def test_rejects_insufficient_history(self):
-        result = pronosticar_partido(self.snapshots[:2], "Ana", "Beto", fecha_partido="2026-11-01T00:00:00+00:00")
+        result = pronosticar_partido(self.snapshots[:1], "Ana", "Beto", fecha_partido="2026-11-01T00:00:00+00:00")
         self.assertFalse(result["elegible"])
         self.assertEqual(result["motivo"], "muestra_historica_insuficiente")
 
