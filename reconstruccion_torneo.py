@@ -149,3 +149,81 @@ def reconstruir_secuencia(jugadores, partidos, rating_torneo=None):
         "advertencias": warnings + (["La tabla usa puntos y sets; los desempates oficiales por puntos de juego/H2H no se simulan por partido."] if sequence else []),
         "completa": len(sequence) == len(names) * (len(names) - 1) // 2 and not warnings,
     }
+
+
+
+def parsear_detalle_oficial(texto, grupo):
+    """Extrae Rating +/- y calendario de la ficha a partir del texto visible.
+
+    Solo acepta partidos cuyo rating identifique inequívocamente a ambos
+    jugadores. Los partidos sin correspondencia quedan en advertencias.
+    """
+    import re
+
+    text = " ".join(str(texto or "").replace("\\u00a0", " ").split())
+    ratings = {}
+    for player in grupo:
+        name = str(player.get("jugador") or "").strip()
+        rating = str(player.get("rating") or "").strip()
+        if name and rating:
+            ratings.setdefault(rating, []).append(name)
+
+    # La sección Players precede a Group en la ficha oficial.
+    players_match = re.search(r"Players(.*?)Group", text, re.IGNORECASE)
+    rating_data = {}
+    if players_match:
+        section = players_match.group(1)
+        for player in grupo:
+            name = str(player.get("jugador") or "").strip()
+            pattern = (re.escape(name) +
+                       r"\\s+\\d+\\s+\\d+\\s+\\(\\d+\\s*-\\s*\\d+\\)" +
+                       r"\\s+(\\d+)\\s+([+-])\\s*(\\d+)")
+            match = re.search(pattern, section, re.IGNORECASE)
+            if match:
+                final_rating = int(match.group(1))
+                delta = int(match.group(3)) * (1 if match.group(2) == "+" else -1)
+                rating_data[name] = {"rating_final": final_rating, "variacion": delta}
+
+    # Cada tarjeta/partido queda delimitada por su estado y la hora siguiente.
+    game_section = re.search(r"Tournament games(.*)$", text, re.IGNORECASE)
+    matches, warnings = [], []
+    if game_section:
+        section = game_section.group(1)
+        pattern = re.compile(
+            r"(Finished|Live|Upcoming)\\s+(\\d{1,2}:\\d{2})(.*?)(?=(?:Finished|Live|Upcoming)\\s+\\d{1,2}:\\d{2}|$)",
+            re.IGNORECASE,
+        )
+        stage = "group"
+        for item in pattern.finditer(section):
+            chunk = item.group(3)
+            before = section[:item.start()]
+            if re.search(r"Final\\s*$", before, re.IGNORECASE):
+                stage = "final"
+            elif re.search(r"for 3rd place\\s*$", before, re.IGNORECASE):
+                stage = "third_place"
+            nums = re.findall(r"\\((\\d+)\\)", chunk)
+            tail = re.search(r"\\)\\s*[^()]*\\)\\s*[^()]*?(-?\\d+)\\s+(-?\\d+)\\s*$", chunk)
+            if len(nums) < 2 or not tail:
+                warnings.append({"hora": item.group(2), "motivo": "no se pudo leer rating y marcador del partido"})
+                continue
+            names_a, names_b = ratings.get(nums[0], []), ratings.get(nums[1], [])
+            if len(names_a) != 1 or len(names_b) != 1 or names_a[0] == names_b[0]:
+                warnings.append({"hora": item.group(2), "motivo": "rating no identifica jugadores de forma única"})
+                continue
+            score = (int(tail.group(1)), int(tail.group(2)))
+            matches.append({
+                "orden": len(matches) + 1, "hora": item.group(2),
+                "estado": item.group(1).lower(),
+                "jugador_a": names_a[0], "jugador_b": names_b[0],
+                "marcador_sets": f"{score[0]}:{score[1]}",
+                "fase": stage,
+            })
+    else:
+        warnings.append({"motivo": "no se encontró la sección Tournament games"})
+
+    return {
+        "partidos": matches,
+        "rating_por_jugador": rating_data,
+        "advertencias": warnings,
+        "fuente": "texto visible de la ficha oficial; emparejamiento por rating",
+    }
