@@ -262,14 +262,14 @@ def parsear_detalle_oficial(texto, grupo):
         section = lines[p_start + 1:section_end]
         ignored = {"#", "player", "games", "rating", "+/-", "-", "—"}
         for i, line in enumerate(section):
-            if not re.fullmatch(r"\d+\\s*\\([^)]*\\)", line):
+            if not re.fullmatch(r"\d+\s*\([^)]*\)", line):
                 continue
             if i + 2 >= len(section) or not re.fullmatch(r"\d+", section[i + 1]):
                 continue
             delta_text = section[i + 2]
             if re.fullmatch(r"[+-]", delta_text) and i + 3 < len(section) and re.fullmatch(r"\d+", section[i + 3]):
                 delta_text += section[i + 3]
-            if not re.fullmatch(r"[+-]\s*\\d+", delta_text):
+            if not re.fullmatch(r"[+-]\s*\d+", delta_text):
                 continue
             # El nombre es la línea útil inmediatamente anterior a GAMES;
             # se ignoran separadores gráficos y encabezados de tabla.
