@@ -20,7 +20,7 @@ def snapshot(at, group, tid="T1"):
     return {
         "tournament_id": tid,
         "captured_at": at,
-        "payload": {"id": tid, "estado": "live", "grupos": group},
+        "payload": {"id": tid, "estado": "live", "grupos": [group]},
     }
 
 
