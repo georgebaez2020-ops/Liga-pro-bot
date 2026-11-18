@@ -8,7 +8,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -20,6 +20,15 @@ from tablas_scraper import BASE, MAX_PAGINAS, SALIDA, extraer
 
 PRAGA = ZoneInfo("Europe/Prague")
 COL = ZoneInfo("America/Bogota")
+
+
+def restar_meses(dia: date, meses: int) -> date:
+    """Resta meses calendario conservando el día cuando existe."""
+    import calendar
+    indice = dia.year * 12 + dia.month - 1 - meses
+    year, month0 = divmod(indice, 12)
+    month = month0 + 1
+    return date(year, month, min(dia.day, calendar.monthrange(year, month)[1]))
 
 
 def fecha_env(nombre: str, defecto: date) -> date:
@@ -142,7 +151,7 @@ async def ejecutar(inicio: date, fin: date, max_torneos: int, pausa: float) -> d
 
 async def main():
     hoy_praga = datetime.now(PRAGA).date()
-    inicio = fecha_env("HISTORICAL_FROM", hoy_praga - timedelta(days=365))
+    inicio = fecha_env("HISTORICAL_FROM", restar_meses(hoy_praga, 8))
     fin = fecha_env("HISTORICAL_TO", hoy_praga - timedelta(days=1))
     if fin < inicio:
         raise SystemExit("HISTORICAL_TO debe ser igual o posterior a HISTORICAL_FROM")
