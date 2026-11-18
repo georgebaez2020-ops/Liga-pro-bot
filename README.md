@@ -72,3 +72,7 @@ Pruebas del módulo e integración:
 ```bash
 python -m unittest test_inteligencia_torneo.py
 ```
+
+### Rendimiento en partidos potencialmente decisivos
+
+El análisis incorpora un proxy descriptivo de resultados en partidos cuyo desenlace podía mover al jugador a través del corte competitivo (top 2 en grupos de 4; top 4 en grupos de 5). Se reconstruye la tabla previa retirando temporalmente el duelo y evaluando los escenarios restantes por puntos. No es una medición psicológica de presión ni de puntos decisivos: la fuente actual no entrega secuencias de puntos por set. La tasa se muestra como exploratoria y no se considera muestra suficiente antes de 10 partidos relevantes.
