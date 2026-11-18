@@ -239,28 +239,43 @@ def reconstruir_secuencia(jugadores, partidos, rating_torneo=None):
     }
 
 def _normalizar_tokens_nombre(nombre):
-    """Normaliza nombre completo o abreviado publicado en una tarjeta."""
+    """Normaliza nombres completos y abreviaturas, conservando marcas jr./sr."""
     import re
-    return re.findall(r"[a-z0-9]+", str(nombre or "").casefold())
+    tokens = re.findall(r"[a-z0-9]+(?:-[a-z0-9]+)?", str(nombre or "").casefold())
+    aliases = {"jr": "junior", "sr": "senior"}
+    return [aliases.get(token.rstrip("."), token) for token in tokens]
+
+
+def _nombre_ficha_coincide(nombre_ficha, nombre_completo):
+    """Compara tokens abreviados; admite segundos nombres omitidos y marcas J-r."""
+    abreviados = _normalizar_tokens_nombre(nombre_ficha)
+    completos = _normalizar_tokens_nombre(nombre_completo)
+    if not abreviados or len(abreviados) > len(completos):
+        return False
+    for abreviado, completo in zip(abreviados, completos):
+        if "-" in abreviado:
+            partes = abreviado.split("-", 1)
+            if len(partes[0]) == 1 and len(partes[1]) == 1:
+                if not (completo.startswith(partes[0]) and completo.endswith(partes[1])):
+                    return False
+            elif not completo.startswith(abreviado):
+                return False
+        elif not completo.startswith(abreviado):
+            return False
+    return True
 
 
 def _resolver_jugador_por_rating_y_nombre(rating, nombre_ficha, ratings):
-    """Resuelve ratings repetidos usando el nombre abreviado de la tarjeta.
+    """Resuelve ratings repetidos usando las abreviaturas de la tarjeta oficial.
 
-    Ejemplo: rating 639 puede pertenecer a Hrabec Jan y Blejchar Marek;
-    '(639) Hrabec J' identifica al primero por prefijos de tokens.
+    Admite nombres con segundos apellidos/nombres omitidos y sufijos jr./sr.
+    Las coincidencias ambiguas se dejan sin resolver: nunca se elige al azar.
     """
     candidatos = ratings.get(str(rating), [])
-    tokens_ficha = _normalizar_tokens_nombre(nombre_ficha)
-    coincidentes = []
-    if tokens_ficha:
-        for candidato in candidatos:
-            tokens_completos = _normalizar_tokens_nombre(candidato)
-            if len(tokens_ficha) == len(tokens_completos) and all(
-                completo.startswith(abreviado)
-                for abreviado, completo in zip(tokens_ficha, tokens_completos)
-            ):
-                coincidentes.append(candidato)
+    coincidentes = [
+        candidato for candidato in candidatos
+        if _nombre_ficha_coincide(nombre_ficha, candidato)
+    ]
     if len(coincidentes) == 1:
         return coincidentes[0]
     # Conserva compatibilidad con fichas donde el rating ya es único.
