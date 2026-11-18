@@ -244,6 +244,38 @@ Mares F
         self.assertEqual(second["puntos_sets_b"], [11, 10, 15, 10, 11])
         self.assertEqual((second["puntos_juego_a"], second["puntos_juego_b"]), (48, 57))
 
+    def test_parses_upcoming_roster_without_group_table(self):
+        page_text = """Players
+#
+PLAYER
+GAMES
+RATING
++/-
+-
+Picek Petr
+0 (0-0)
+614
++ 10
+-
+Stefek Martin
+0 (0-0)
+558
+- 3
+Tournament games
+UPCOMING
+23:59
+(614)
+Picek P
+(558)
+Stefek M
+"""
+        parsed = parsear_detalle_oficial(page_text, [])
+        self.assertEqual(len(parsed["partidos"]), 1)
+        self.assertEqual(parsed["partidos"][0]["estado"], "upcoming")
+        self.assertEqual(parsed["partidos"][0]["jugador_a"], "Picek Petr")
+        self.assertEqual(parsed["partidos"][0]["jugador_b"], "Stefek Martin")
+        self.assertEqual(parsed["rating_por_jugador"]["Picek Petr"]["rating_final"], 614)
+
     def test_live_partial_score_is_not_treated_as_finished(self):
         group = [{"jugador": "A", "rating": "384"}, {"jugador": "B", "rating": "366"},
                  {"jugador": "C", "rating": "313"}, {"jugador": "D", "rating": "409"}]
