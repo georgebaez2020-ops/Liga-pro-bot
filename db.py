@@ -221,7 +221,7 @@ class HistoryDB:
     def save_historical_scrape(self, tournament: dict[str, Any]) -> dict[str, int]:
         """Guarda una ficha histórica con timestamp estable: repetir el backfill no duplica snapshots."""
         official_date = str(tournament.get("fecha_torneo") or "").strip()
-        if not re.fullmatch(r"\\d{4}-\\d{2}-\\d{2}", official_date):
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", official_date):
             raise ValueError("La ficha no contiene una fecha oficial YYYY-MM-DD")
         parsed = datetime.fromisoformat(official_date).replace(tzinfo=timezone.utc)
         stable_data = {
