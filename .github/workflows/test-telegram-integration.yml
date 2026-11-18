@@ -30,4 +30,5 @@ jobs:
             tests/test_motor_pronosticos.py \
             tests/test_retroalimentacion.py \
             test_db.py \
-            test_backfill_historico.py
+            test_backfill_historico.py \
+            test_reconstruccion_torneo.py
