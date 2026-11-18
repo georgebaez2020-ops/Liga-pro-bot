@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -40,6 +41,12 @@ def url_lista_rango(inicio: date, fin: date) -> str:
     return f"{BASE}?date_from={inicio.isoformat()}&date_to={fin.isoformat()}"
 
 
+def extraer_id_torneo(href: str) -> str | None:
+    """Extrae solo IDs numéricos de rutas oficiales de torneo."""
+    match = re.search(r"/en/tournaments/(\\d+)(?:[/?#]|$)", str(href or ""))
+    return match.group(1) if match else None
+
+
 async def descubrir_fecha(page, dia: date) -> list[dict]:
     """Enumera IDs de torneo en todas las páginas observadas para ese día."""
     pendientes = [url_lista_rango(dia, dia)]
@@ -59,11 +66,9 @@ async def descubrir_fecha(page, dia: date) -> list[dict]:
                   className:typeof card.className === "string" ? card.className : ""};
         })""")
         for item in items:
-            import re
-            match = re.search(r"/en/tournaments/(\\d+)", item.get("href", ""))
-            if not match:
+            tid = extraer_id_torneo(item.get("href", ""))
+            if not tid:
                 continue
-            tid = match.group(1)
             encontrados[tid] = {
                 "id": tid, "estado": "finished",
                 "url": f"{BASE}/{tid}",
@@ -142,10 +147,17 @@ async def ejecutar(inicio: date, fin: date, max_torneos: int, pausa: float) -> d
         await browser.close()
 
     integrar_inteligencia_en_resultado(resultado)
+    if resultado["resumen"]["torneos_encontrados"] == 0:
+        resultado["error_global"] = (
+            "No se detectó ningún torneo en el rango solicitado. "
+            "Se detiene la ejecución para evitar un falso éxito sin datos."
+        )
     Path(SALIDA).mkdir(parents=True, exist_ok=True)
     Path(SALIDA, "backfill_historico.json").write_text(
         json.dumps(resultado, ensure_ascii=False, indent=2), encoding="utf-8"
     )
+    if resultado.get("error_global"):
+        raise RuntimeError(resultado["error_global"])
     return resultado
 
 
