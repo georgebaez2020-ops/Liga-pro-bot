@@ -170,6 +170,11 @@ def analizar_escenarios(clasificacion):
     max_place = {name: 1 for name in names}
     total = 1 << len(pending)
 
+    if not pending and not inconsistent:
+        for row in rows:
+            min_place[row["jugador"]] = row["puesto_grupo"]
+            max_place[row["jugador"]] = row["puesto_grupo"]
+
     for mask in range(total):
         points = dict(base)
         for index, duel in enumerate(pending):
@@ -240,9 +245,10 @@ def evaluar_necesidad_jugador(clasificacion, jugador):
         else:
             objective = "asegurar un puesto entre los cuatro que disputan la fase final"
             target = "top 4"
+    escenario = (clasificacion.get("escenarios") or {}).get("jugadores", {}).get(jugador)
     return {
         "jugador": jugador, "puesto_provisional": place, "objetivo_reglamentario": objective,
-        "referencia": target, "requiere_atencion": pending,
+        "referencia": target, "requiere_atencion": pending, "escenario_por_puntos": escenario,
         "advertencia": "Puesto provisional: hay partidos pendientes o marcadores inconsistentes."
         if pending else "Clasificación de grupo completa; falta considerar el resultado de la fase final.",
     }
