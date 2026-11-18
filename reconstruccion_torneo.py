@@ -395,3 +395,31 @@ def parsear_detalle_oficial(texto, grupo):
         "advertencias": warnings,
         "fuente": "texto visible de la ficha oficial; emparejamiento por rating",
     }
+
+
+def consolidar_partidos_torneo(analisis_cronologico, partidos_sin_grupo=None):
+    """Expone el calendario oficial en una estructura común para el motor predictivo.
+
+    Conserva el grupo y la fase de origen; no genera enfrentamientos que la web
+    no haya publicado. Los ratings solo se combinan cuando identifican al jugador.
+    """
+    partidos = []
+    ratings = {}
+    for partido in partidos_sin_grupo or []:
+        partidos.append({**partido, "grupo": None})
+    for analisis in analisis_cronologico or []:
+        numero = analisis.get("grupo")
+        for partido in analisis.get("partidos_ficha", []):
+            partidos.append({**partido, "grupo": numero})
+        for jugador, datos in (analisis.get("rating_por_jugador") or {}).items():
+            ratings[jugador] = datos
+    # El orden oficial de la ficha se conserva dentro de cada grupo.
+    partidos.sort(key=lambda p: (p.get("grupo") or 0, p.get("orden") or 0))
+    return {
+        "partidos": partidos,
+        "partidos_programados": [p for p in partidos if p.get("estado") in {"planned", "upcoming"}],
+        "partidos_en_vivo": [p for p in partidos if p.get("estado") == "live"],
+        "partidos_finalizados": [p for p in partidos if p.get("estado") == "finished"],
+        "rating_por_jugador": ratings,
+        "fuente": "calendario Tournament games de la ficha oficial",
+    }
