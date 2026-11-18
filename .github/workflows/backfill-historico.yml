@@ -6,10 +6,12 @@ on:
       from_date:
         description: "Fecha inicial (YYYY-MM-DD)"
         required: true
+        default: "2025-11-18"
         type: string
       to_date:
         description: "Fecha final (YYYY-MM-DD)"
         required: true
+        default: "2026-11-17"
         type: string
       max_tournaments:
         description: "Máximo de torneos en esta ejecución"
