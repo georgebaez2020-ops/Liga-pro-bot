@@ -189,6 +189,60 @@ Tournament games
         self.assertEqual(parsed["rating_por_jugador"]["C"]["variacion"], 3)
         self.assertEqual(parsed["rating_por_jugador"]["D"]["variacion"], -15)
 
+    def test_parses_individual_points_from_official_match_card(self):
+        group = [
+            {"jugador": "Vales Jakub", "rating": "1078"},
+            {"jugador": "Zajicek Jan", "rating": "1076"},
+            {"jugador": "Medek Josef", "rating": "1102"},
+            {"jugador": "Mares Filip", "rating": "1012"},
+        ]
+        page_text = """Tournament games
+Group
+FINISHED
+20:00
+(1078)
+Vales J
+(1076)
+Zajicek J
+3
+11
+11
+12
+14
+1
+13
+5
+10
+12
+FINISHED
+20:30
+(1102)
+Medek J
+(1012)
+Mares F
+2
+8
+12
+13
+12
+3
+11
+10
+15
+10
+11
+"""
+        parsed = parsear_detalle_oficial(page_text, group)
+        first, second = parsed["partidos"]
+        self.assertEqual(first["marcador_sets"], "3:1")
+        self.assertEqual(first["puntos_sets_a"], [11, 11, 12, 14])
+        self.assertEqual(first["puntos_sets_b"], [13, 5, 10, 12])
+        self.assertEqual((first["puntos_juego_a"], first["puntos_juego_b"]), (48, 40))
+        self.assertEqual(second["marcador_sets"], "2:3")
+        self.assertEqual(second["puntos_sets_a"], [8, 12, 13, 12, 3])
+        self.assertEqual(second["puntos_sets_b"], [11, 10, 15, 10, 11])
+        self.assertEqual((second["puntos_juego_a"], second["puntos_juego_b"]), (48, 57))
+
     def test_live_partial_score_is_not_treated_as_finished(self):
         group = [{"jugador": "A", "rating": "384"}, {"jugador": "B", "rating": "366"},
                  {"jugador": "C", "rating": "313"}, {"jugador": "D", "rating": "409"}]
