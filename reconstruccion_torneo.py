@@ -9,7 +9,7 @@ def _score(value):
         a, b = value
     else:
         import re
-        m = re.fullmatch(r"\\s*(\\d+)\\s*[:\\-]\\s*(\\d+)\\s*", str(value or ""))
+        m = re.fullmatch(r"\s*(\d+)\s*[:\-]\s*(\d+)\s*", str(value or ""))
         if not m:
             return None
         a, b = map(int, m.groups())
@@ -134,7 +134,7 @@ def parsear_detalle_oficial(texto, grupo):
     """Lee tarjetas de partido multilínea del texto visible de la ficha oficial."""
     import re
 
-    lines = [line.strip() for line in str(texto or "").replace("\\u00a0", " ").splitlines() if line.strip()]
+    lines = [line.strip() for line in str(texto or "").replace("\u00a0", " ").splitlines() if line.strip()]
     ratings = {}
     for player in grupo:
         name = str(player.get("jugador") or "").strip()
@@ -155,10 +155,10 @@ def parsear_detalle_oficial(texto, grupo):
                     games = section[i + 1]
                     final_rating = section[i + 2]
                     delta_text = section[i + 3]
-                    if re.fullmatch(r"\\d+\\s*\\([^)]*\\)", games) and re.fullmatch(r"\\d+", final_rating) and re.fullmatch(r"[+-]\\s*\\d+", delta_text):
+                    if re.fullmatch(r"\d+\s*\([^)]*\)", games) and re.fullmatch(r"\d+", final_rating) and re.fullmatch(r"[+-]\s*\d+", delta_text):
                         rating_data[name] = {
                             "rating_final": int(final_rating),
-                            "variacion": int(re.sub(r"\\s", "", delta_text)),
+                            "variacion": int(re.sub(r"\s", "", delta_text)),
                         }
                     break
     except StopIteration:
@@ -188,7 +188,7 @@ def parsear_detalle_oficial(texto, grupo):
             i += 1
             continue
         status = marker
-        if i + 1 >= len(lines) or not re.fullmatch(r"\\d{1,2}:\\d{2}", lines[i + 1]):
+        if i + 1 >= len(lines) or not re.fullmatch(r"\d{1,2}:\d{2}", lines[i + 1]):
             warnings.append({"motivo": "tarjeta sin hora reconocible"})
             i += 1
             continue
@@ -197,9 +197,9 @@ def parsear_detalle_oficial(texto, grupo):
         if j + 3 >= len(lines):
             warnings.append({"hora": hour, "motivo": "tarjeta de partido incompleta"})
             break
-        r1 = re.fullmatch(r"\\((\\d+)\\)", lines[j])
+        r1 = re.fullmatch(r"\((\d+)\)", lines[j])
         name1 = lines[j + 1]
-        r2 = re.fullmatch(r"\\((\\d+)\\)", lines[j + 2])
+        r2 = re.fullmatch(r"\((\d+)\)", lines[j + 2])
         name2 = lines[j + 3]
         if not r1 or not r2:
             warnings.append({"hora": hour, "motivo": "no se encontraron los ratings de ambos jugadores"})
@@ -212,7 +212,7 @@ def parsear_detalle_oficial(texto, grupo):
             continue
         score = None
         if status == "finished":
-            if j + 5 < len(lines) and re.fullmatch(r"\\d+", lines[j + 4]) and re.fullmatch(r"\\d+", lines[j + 5]):
+            if j + 5 < len(lines) and re.fullmatch(r"\d+", lines[j + 4]) and re.fullmatch(r"\d+", lines[j + 5]):
                 score = f"{lines[j + 4]}:{lines[j + 5]}"
             else:
                 warnings.append({"hora": hour, "motivo": "partido marcado FINISHED sin marcador completo"})
