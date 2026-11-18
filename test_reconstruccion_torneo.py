@@ -77,6 +77,49 @@ class ReconstruccionTests(unittest.TestCase):
         self.assertEqual({table[0]["jugador"], table[1]["jugador"]}, {"A", "B"})
         self.assertTrue(any(set(x["jugadores"]) == {"A", "B"} for x in unresolved))
 
+    def test_resolves_duplicate_ratings_with_abbreviated_card_names(self):
+        group = [
+            {"jugador": "Hrabec Jan", "rating": "639"},
+            {"jugador": "Blejchar Marek", "rating": "639"},
+            {"jugador": "Hanel Patrik", "rating": "616"},
+            {"jugador": "Osvald Petr", "rating": "594"},
+        ]
+        page_text = """Tournament games
+Group
+FINISHED
+08:00
+(639)
+Hrabec J
+(616)
+Hanel P
+2
+3
+FINISHED
+08:31
+(639)
+Blejchar M
+(594)
+Osvald P
+1
+3
+"""
+        parsed = parsear_detalle_oficial(page_text, group)
+        self.assertEqual(len(parsed["partidos"]), 2)
+        self.assertEqual(parsed["partidos"][0]["jugador_a"], "Hrabec Jan")
+        self.assertEqual(parsed["partidos"][0]["jugador_b"], "Hanel Patrik")
+        self.assertEqual(parsed["partidos"][1]["jugador_a"], "Blejchar Marek")
+        self.assertEqual(parsed["partidos"][1]["jugador_b"], "Osvald Petr")
+        self.assertFalse(parsed["advertencias"])
+
+    def test_keeps_ambiguous_abbreviated_names_unresolved(self):
+        from reconstruccion_torneo import _resolver_jugador_por_rating_y_nombre
+        ratings = {"639": ["Hrabec Jan", "Hrabec Jiri"]}
+        self.assertIsNone(_resolver_jugador_por_rating_y_nombre("639", "Hrabec J", ratings))
+        self.assertEqual(
+            _resolver_jugador_por_rating_y_nombre("639", "Hrabec Jan", ratings),
+            "Hrabec Jan",
+        )
+
     def test_parses_multiline_official_finished_matches(self):
         group = [
             {"jugador": "Picek Petr", "rating": "614"},
