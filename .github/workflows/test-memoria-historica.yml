@@ -21,6 +21,8 @@ on:
       - 'reconstruccion_torneo.py'
       - 'test_reconstruccion_torneo.py'
       - 'test_inteligencia_torneo.py'
+      - 'inspeccionar_hoja_partido.py'
+      - 'test_inspeccionar_hoja_partido.py'
       - 'requirements.txt'
       - '.github/workflows/test-memoria-historica.yml'
 
@@ -37,8 +39,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Instalar dependencias de base de datos
-        run: pip install "psycopg[binary]==3.2.6"
+      - name: Instalar dependencias de pruebas
+        run: pip install "psycopg[binary]==3.2.6" playwright
       - name: Ejecutar pruebas
         run: |
           python -m unittest -v \
@@ -49,7 +51,8 @@ jobs:
             test_historial_rendimiento.py \
             test_radar_necesidad.py \
             test_perfil_jugadores.py \
-            test_reconstruccion_torneo.py
+            test_reconstruccion_torneo.py \\
+            test_inspeccionar_hoja_partido.py
 
   historical-reports:
     runs-on: ubuntu-latest
