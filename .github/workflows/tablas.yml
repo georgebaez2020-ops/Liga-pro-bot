@@ -61,7 +61,12 @@ jobs:
           MAX_TORNEOS: '100'
           MAX_PAGINAS: '10'
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: python tablas_scraper.py
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "ERROR: falta el secreto DATABASE_URL; se cancela para no guardar accidentalmente en SQLite."
+            exit 1
+          fi
+          python tablas_scraper.py
 
       - name: Probar analizador de jugadores
         run: python -m unittest test_analisis_jugadores.py
