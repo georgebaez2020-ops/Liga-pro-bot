@@ -38,8 +38,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/calendario — partidos programados y en vivo\n"
         "/pronosticos — análisis conservador de próximos partidos\n"
         "/jugador NOMBRE — histórico de un jugador\n"
-        "/necesidad NOMBRE — respuesta histórica cuando debía ganar\\n"
-        "/rendimiento NOMBRE — partidos competitivamente relevantes\\n"
+        "/necesidad NOMBRE — respuesta histórica cuando debía ganar\n"
+        "/rendimiento NOMBRE — partidos competitivamente relevantes\n"
         "/h2h JUGADOR 1 | JUGADOR 2 — enfrentamientos directos\n"
         "/evaluacion — métricas de aciertos y calibración\n"
         "/test — comprobar conexión")
@@ -146,15 +146,15 @@ async def necesidad(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lines = ["🧭 RADAR DE NECESIDAD COMPETITIVA"]
         for row in rows:
             lines.append(
-                f"{row['jugador']}\\nPartidos con necesidad: {row['partidos_con_necesidad']} | "
-                f"Obligado a ganar: {row['partidos_obligado_a_ganar']}\\n"
+                f"{row['jugador']}\nPartidos con necesidad: {row['partidos_con_necesidad']} | "
+                f"Obligado a ganar: {row['partidos_obligado_a_ganar']}\n"
                 f"Victorias obligado: {row['victorias_obligado']} | "
-                f"Derrotas: {row['derrotas_obligado']}\\n"
+                f"Derrotas: {row['derrotas_obligado']}\n"
                 f"Respuesta: {row['respuesta_cuando_obligado']} | "
-                f"Muestra suficiente: {'sí' if row['muestra_suficiente'] else 'no'}\\n"
+                f"Muestra suficiente: {'sí' if row['muestra_suficiente'] else 'no'}\n"
                 f"{row['interpretacion']}"
             )
-        await _reply(update, "\\n\\n".join(lines))
+        await _reply(update, "\n\n".join(lines))
     except Exception as exc:
         logging.exception("Error en /necesidad")
         await _reply(update, f"Error consultando radar: {type(exc).__name__}: {exc}")
@@ -173,13 +173,13 @@ async def rendimiento(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lines = ["🔥 RENDIMIENTO EN CONTEXTOS COMPETITIVOS"]
         for row in rows:
             lines.append(
-                f"{row['jugador']}\\nPartidos relevantes: {row['partidos_relevantes']} | "
-                f"Victorias: {row['victorias']} | Derrotas: {row['derrotas']}\\n"
+                f"{row['jugador']}\nPartidos relevantes: {row['partidos_relevantes']} | "
+                f"Victorias: {row['victorias']} | Derrotas: {row['derrotas']}\n"
                 f"Tasa de victoria: {row['tasa_victoria']} | "
-                f"Torneos con muestra: {row['torneos_con_muestra']}\\n"
+                f"Torneos con muestra: {row['torneos_con_muestra']}\n"
                 f"{row['interpretacion']}"
             )
-        await _reply(update, "\\n\\n".join(lines))
+        await _reply(update, "\n\n".join(lines))
     except Exception as exc:
         logging.exception("Error en /rendimiento")
         await _reply(update, f"Error consultando rendimiento: {type(exc).__name__}: {exc}")
