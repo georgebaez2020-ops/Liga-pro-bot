@@ -160,7 +160,7 @@ def parsear_detalle_oficial(texto, grupo):
     """
     import re
 
-    text = " ".join(str(texto or "").replace("\\u00a0", " ").split())
+    text = " ".join(str(texto or "").replace("\u00a0", " ").split())
     ratings = {}
     for player in grupo:
         name = str(player.get("jugador") or "").strip()
@@ -176,8 +176,8 @@ def parsear_detalle_oficial(texto, grupo):
         for player in grupo:
             name = str(player.get("jugador") or "").strip()
             pattern = (re.escape(name) +
-                       r"\\s+\\d+\\s+\\d+\\s+\\(\\d+\\s*-\\s*\\d+\\)" +
-                       r"\\s+(\\d+)\\s+([+-])\\s*(\\d+)")
+                       r"\s+\d+\s+\d+\s+\(\d+\s*-\s*\d+\)" +
+                       r"\s+(\d+)\s+([+-])\s*(\d+)")
             match = re.search(pattern, section, re.IGNORECASE)
             if match:
                 final_rating = int(match.group(1))
@@ -190,19 +190,19 @@ def parsear_detalle_oficial(texto, grupo):
     if game_section:
         section = game_section.group(1)
         pattern = re.compile(
-            r"(Finished|Live|Upcoming)\\s+(\\d{1,2}:\\d{2})(.*?)(?=(?:Finished|Live|Upcoming)\\s+\\d{1,2}:\\d{2}|$)",
+            r"(Finished|Live|Upcoming)\s+(\d{1,2}:\d{2})(.*?)(?=(?:Finished|Live|Upcoming)\s+\d{1,2}:\d{2}|$)",
             re.IGNORECASE,
         )
         stage = "group"
         for item in pattern.finditer(section):
             chunk = item.group(3)
             before = section[:item.start()]
-            if re.search(r"Final\\s*$", before, re.IGNORECASE):
+            if re.search(r"Final\s*$", before, re.IGNORECASE):
                 stage = "final"
-            elif re.search(r"for 3rd place\\s*$", before, re.IGNORECASE):
+            elif re.search(r"for 3rd place\s*$", before, re.IGNORECASE):
                 stage = "third_place"
-            nums = re.findall(r"\\((\\d+)\\)", chunk)
-            tail = re.search(r"\\)\\s*[^()]*\\)\\s*[^()]*?(-?\\d+)\\s+(-?\\d+)\\s*$", chunk)
+            nums = re.findall(r"\((\d+)\)", chunk)
+            tail = re.search(r"\)\s*[^()]*\)\s*[^()]*?(-?\d+)\s+(-?\d+)\s*$", chunk)
             if len(nums) < 2 or not tail:
                 warnings.append({"hora": item.group(2), "motivo": "no se pudo leer rating y marcador del partido"})
                 continue
