@@ -38,7 +38,7 @@ def fecha_env(nombre: str, defecto: date) -> date:
 
 
 def url_lista_rango(inicio: date, fin: date) -> str:
-    return f"{BASE}?date_from={inicio.isoformat()}&date_to={fin.isoformat()}&status=2"
+    return f"{BASE}?date_from={inicio.isoformat()}&date_to={(fin + timedelta(days=1)).isoformat()}"
 
 
 def extraer_id_torneo(href: str) -> str | None:
@@ -60,18 +60,19 @@ async def descubrir_fecha(page, dia: date) -> list[dict]:
         await page.goto(url, wait_until="domcontentloaded", timeout=60000)
         await page.wait_for_timeout(700)
         diagnostico = await page.evaluate("""() => {
-          const cards = Array.from(document.querySelectorAll(".c-tournament-item"));
-          const items = cards.flatMap(card =>
-            Array.from(card.querySelectorAll('a[href*="/en/tournaments/"]')).map(a => ({
-              href: a.href,
-              text: (card.innerText || card.textContent || "").trim(),
-              className: typeof card.className === "string" ? card.className : ""
-            }))
-          );
-          const candidatos = Array.from(document.querySelectorAll('a[href*="/en/tournaments/"]')).map(a => {
+          const anchors = Array.from(document.querySelectorAll('a[href*="/en/tournaments/"]'));
+          const candidatos = anchors.map(a => {
             const card = a.closest(".c-tournament-item") || a.closest(".c-live-matches-item") || a;
             return {href:a.href, className:typeof card.className === "string" ? card.className : "",
                     text:(card.innerText || card.textContent || "").trim().slice(0,180)};
+          });
+          // El carrusel superior contiene partidos en vivo de hoy, incluso al filtrar
+          // fechas antiguas. Se excluye únicamente ese contenedor; el listado histórico
+          // se obtiene del resto de enlaces oficiales, sin depender de una clase supuesta.
+          const items = anchors.filter(a => !a.closest(".c-live-matches-item")).map(a => {
+            const card = a.closest(".c-tournament-item") || a.parentElement || a;
+            return {href:a.href, text:(card.innerText || card.textContent || "").trim(),
+                    className:typeof card.className === "string" ? card.className : ""};
           });
           return {items, candidatos, title:document.title, url:location.href,
                   body:(document.body.innerText || "").trim().slice(0,1200)};
