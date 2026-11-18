@@ -6,6 +6,7 @@ on:
       - feature/status-upcoming-live-finished
     paths:
       - 'tablas_scraper.py'
+      - 'reconstruccion_torneo.py'
       - 'inteligencia_torneo.py'
       - '.github/workflows/validar-scraper-real.yml'
 
