@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 from playwright.async_api import async_playwright
 
 from db import HistoryDB
-from inteligencia_torneo import integrar_inteligencia_en_resultado
+from inteligencia_torneo import integrar_inteligencia_en_resultado\nfrom reconstruccion_torneo import parsear_detalle_oficial, reconstruir_secuencia
 
 COL = ZoneInfo("America/Bogota")
 PRAGA = ZoneInfo("Europe/Prague")
@@ -185,10 +185,30 @@ async def extraer(page, torneo):
     # y "Tournament games" (orden/hora y resultados). Se parseará sin
     # sustituir los datos tabulares originales ni inventar coincidencias.
     detalle_texto = await page.locator("body").inner_text()
+    analisis_cronologico = []
+    for numero, grupo in enumerate(grupos, start=1):
+        extraido = parsear_detalle_oficial(detalle_texto, grupo)
+        partidos_grupo = [
+            partido for partido in extraido["partidos"]
+            if partido.get("estado") == "finished" and partido.get("fase") == "group"
+        ]
+        reconstruido = reconstruir_secuencia(
+            [p.get("jugador", "") for p in grupo],
+            partidos_grupo,
+            extraido.get("rating_por_jugador", {}),
+        )
+        analisis_cronologico.append({
+            "grupo": numero,
+            "partidos_ficha": extraido["partidos"],
+            "rating_por_jugador": extraido["rating_por_jugador"],
+            "reconstruccion": reconstruido,
+            "advertencias_extraccion": extraido["advertencias"],
+        })
     return {
         **torneo,
         "grupos": grupos,
         "detalle_texto": detalle_texto,
+        "analisis_cronologico": analisis_cronologico,
         "filas_leidas": len(filas),
         "grupos_completos": len(grupos),
         "aviso": None if grupos else "no se pudieron formar grupos completos de 4 o 5",
