@@ -10,7 +10,7 @@ on:
       - 'retroalimentacion.py'
       - 'motor_pronosticos.py'
       - 'tests/test_retroalimentacion.py'
-      - 'tests/test_motor_pronosticos.py'
+      - 'tests/test_motor_pronosticos.py'\n      - 'servicio_pronosticos.py'\n      - 'bot_telegram.py'\n      - 'test_servicio_pronosticos.py'
       - 'historial_rendimiento.py'
       - 'radar_necesidad.py'
       - 'test_radar_necesidad.py'
@@ -65,7 +65,7 @@ jobs:
             test_analisis_punto_a_punto.py \
             test_rendimiento_punto_a_punto.py \
             tests/test_retroalimentacion.py \
-            tests/test_motor_pronosticos.py
+            tests/test_motor_pronosticos.py \\\n            test_servicio_pronosticos.py
 
   historical-reports:
     runs-on: ubuntu-latest
