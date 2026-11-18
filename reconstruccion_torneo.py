@@ -71,12 +71,8 @@ def reconstruir_secuencia(jugadores, partidos, rating_torneo=None):
         normalized.append((match, a, b, score))
 
     for idx, (match, a, b, score) in enumerate(normalized):
-        remaining = [(x, y) for x, y in combinations(names, 2)
-                     if frozenset((x, y)) not in played or
-                     (frozenset((x, y)) == frozenset((a, b)) and idx < len(normalized))]
-        remaining = [(x, y) for x, y in remaining
-                     if frozenset((x, y)) != frozenset((a, b))]
-        # Se consideran solo duelos aún no disputados en esta secuencia.
+        remaining = [(future[1], future[2]) for future in normalized[idx + 1:]]
+        # Se consideran los partidos que la ficha oficial sitúa después de este encuentro.
         before = {n: points[n] for n in names}
         necessity = {}
         cutoff_phase = 2 if len(names) == 4 else 4
