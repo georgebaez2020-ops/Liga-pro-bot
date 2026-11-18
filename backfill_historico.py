@@ -38,7 +38,7 @@ def fecha_env(nombre: str, defecto: date) -> date:
 
 
 def url_lista_rango(inicio: date, fin: date) -> str:
-    return f"{BASE}?date_from={inicio.isoformat()}&date_to={fin.isoformat()}"
+    return f"{BASE}?date_from={inicio.isoformat()}&date_to={fin.isoformat()}&status=2"
 
 
 def extraer_id_torneo(href: str) -> str | None:
@@ -179,7 +179,7 @@ async def ejecutar(inicio: date, fin: date, max_torneos: int, pausa: float) -> d
 
 async def main():
     hoy_praga = datetime.now(PRAGA).date()
-    inicio = fecha_env("HISTORICAL_FROM", restar_meses(hoy_praga, 12))
+    inicio = fecha_env("HISTORICAL_FROM", restar_meses(hoy_praga, 2))
     fin = fecha_env("HISTORICAL_TO", hoy_praga - timedelta(days=1))
     if fin < inicio:
         raise SystemExit("HISTORICAL_TO debe ser igual o posterior a HISTORICAL_FROM")
