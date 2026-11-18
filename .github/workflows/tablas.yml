@@ -1,6 +1,12 @@
 name: Tablas Liga Pro
 
 on:
+  push:
+    branches:
+      - feature/status-upcoming-live-finished
+    paths:
+      - 'tablas_scraper.py'
+      - '.github/workflows/tablas.yml'
   workflow_dispatch:
     inputs:
       torneos:
