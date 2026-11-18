@@ -26,6 +26,8 @@ on:
       - 'test_inspeccionar_hoja_partido.py'
       - 'analisis_punto_a_punto.py'
       - 'test_analisis_punto_a_punto.py'
+      - 'rendimiento_punto_a_punto.py'
+      - 'test_rendimiento_punto_a_punto.py'
       - 'requirements.txt'
       - '.github/workflows/test-memoria-historica.yml'
 
@@ -56,7 +58,8 @@ jobs:
             test_perfil_jugadores.py \
             test_reconstruccion_torneo.py \
             test_inspeccionar_hoja_partido.py \
-            test_analisis_punto_a_punto.py
+            test_analisis_punto_a_punto.py \\
+            test_rendimiento_punto_a_punto.py
 
   historical-reports:
     runs-on: ubuntu-latest
