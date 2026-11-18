@@ -58,13 +58,37 @@ async def descubrir_fecha(page, dia: date) -> list[dict]:
         visitadas.add(url)
         await page.goto(url, wait_until="domcontentloaded", timeout=60000)
         await page.wait_for_timeout(700)
-        items = await page.evaluate("""() => Array.from(
-          document.querySelectorAll('a[href*="/en/tournaments/"]')
-        ).map(a => {
-          const card = a.closest(".c-tournament-item") || a.closest(".c-live-matches-item") || a;
-          return {href:a.href, text:(card.innerText || card.textContent || "").trim(),
-                  className:typeof card.className === "string" ? card.className : ""};
-        })""")
+        diagnostico = await page.evaluate("""() => {
+          const cards = Array.from(document.querySelectorAll(".c-tournament-item"));
+          const items = cards.flatMap(card =>
+            Array.from(card.querySelectorAll('a[href*="/en/tournaments/"]')).map(a => ({
+              href: a.href,
+              text: (card.innerText || card.textContent || "").trim(),
+              className: typeof card.className === "string" ? card.className : ""
+            }))
+          );
+          const candidatos = Array.from(document.querySelectorAll('a[href*="/en/tournaments/"]')).map(a => {
+            const card = a.closest(".c-tournament-item") || a.closest(".c-live-matches-item") || a;
+            return {href:a.href, className:typeof card.className === "string" ? card.className : "",
+                    text:(card.innerText || card.textContent || "").trim().slice(0,180)};
+          });
+          return {items, candidatos, title:document.title, url:location.href,
+                  body:(document.body.innerText || "").trim().slice(0,1200)};
+        }""")
+        items = diagnostico["items"]
+        resultado_diag = {
+            "fecha_consultada": dia.isoformat(),
+            "url_solicitada": url,
+            "url_final": diagnostico.get("url"),
+            "titulo": diagnostico.get("title"),
+            "torneos_en_listado": len(items),
+            "candidatos_globales": diagnostico.get("candidatos", [])[:20],
+            "texto_pagina": diagnostico.get("body", ""),
+        }
+        # Guarda evidencia de la página para poder ajustar el archivo sin confundir
+        # el carrusel global de partidos en vivo con el listado histórico filtrado.
+        if len(resultado_diag["candidatos_globales"]) or not items:
+            resultado.setdefault("diagnostico_listados", []).append(resultado_diag)
         for item in items:
             tid = extraer_id_torneo(item.get("href", ""))
             if not tid:
