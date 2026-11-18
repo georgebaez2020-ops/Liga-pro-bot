@@ -61,6 +61,7 @@ El servicio de Render existente arranca \`bot_telegram.py\`. El recolector y la 
 - Desempates en el orden del reglamento: sets ganados, diferencia de sets, diferencia de puntos, puntos anotados y enfrentamiento directo únicamente al comparar exactamente dos jugadores.
 - Partidos pendientes y marcadores inconsistentes se muestran por separado.
 - Objetivos reglamentarios: en grupos de 4, puestos 1-2 disputan la final y 3-4 el partido por el tercer puesto; en grupos de 5, el quinto queda eliminado de la fase final y los otros cuatro disputan partidos de posición.
+- Escenarios: enumera todas las combinaciones de victoria/derrota de los duelos pendientes y calcula rangos de puestos por puntos para cada jugador. Expone si puede alcanzar el top 2 o la fase final y si lo asegura por puntos. Los empates se expresan como rangos porque los desempates futuros dependen de sets/puntos aún desconocidos; marcadores inconsistentes se excluyen y marcan los escenarios como incompletos.
 
 **Límites deliberados de esta primera versión:** el scraper actual extrae la tabla de grupos, no un registro estructurado de retiros, lesiones, descalificaciones, walkovers ni resultados de la fase final. Por eso el módulo no inventa esas circunstancias ni calcula un puesto definitivo del torneo. La clasificación se marca provisional mientras haya partidos pendientes o inconsistencias. Tampoco presenta el objetivo actual como una clasificación matemática asegurada.
 
