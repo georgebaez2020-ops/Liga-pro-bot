@@ -5,12 +5,16 @@ on:
   push:
     branches:
       - feature/status-upcoming-live-finished
+      - integration/telegram-prediction-engine
     paths:
       - 'db.py'
       - 'retroalimentacion.py'
       - 'motor_pronosticos.py'
       - 'tests/test_retroalimentacion.py'
-      - 'tests/test_motor_pronosticos.py'\n      - 'servicio_pronosticos.py'\n      - 'bot_telegram.py'\n      - 'test_servicio_pronosticos.py'
+      - 'tests/test_motor_pronosticos.py'
+      - 'servicio_pronosticos.py'
+      - 'bot_telegram.py'
+      - 'test_servicio_pronosticos.py'
       - 'historial_rendimiento.py'
       - 'radar_necesidad.py'
       - 'test_radar_necesidad.py'
@@ -44,7 +48,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: feature/status-upcoming-live-finished
+          ref: ${{ github.ref_name }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -65,15 +69,17 @@ jobs:
             test_analisis_punto_a_punto.py \
             test_rendimiento_punto_a_punto.py \
             tests/test_retroalimentacion.py \
-            tests/test_motor_pronosticos.py \\\n            test_servicio_pronosticos.py
+            tests/test_motor_pronosticos.py \
+            test_servicio_pronosticos.py
 
   historical-reports:
+    if: ${{ secrets.DATABASE_URL != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: feature/status-upcoming-live-finished
+          ref: ${{ github.ref_name }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -83,7 +89,6 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
-          test -n "$DATABASE_URL" || (echo "Falta el secreto DATABASE_URL" && exit 1)
           python perfil_jugadores.py
           python historial_rendimiento.py
           python radar_necesidad.py
