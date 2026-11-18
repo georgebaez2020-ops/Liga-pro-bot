@@ -6,7 +6,7 @@ on:
       from_date:
         description: "Fecha inicial (YYYY-MM-DD)"
         required: true
-        default: "2025-11-18"
+        default: "2026-09-18"
         type: string
       to_date:
         description: "Fecha final (YYYY-MM-DD)"
