@@ -168,3 +168,16 @@ def acumular_historial_presion(snapshots):
 def analizar_historial_guardado(db):
     """Lee los snapshots persistidos y devuelve el acumulado histórico."""
     return acumular_historial_presion(db.listar_snapshots())
+
+
+if __name__ == "__main__":
+    import json
+    from pathlib import Path
+    from db import HistoryDB
+
+    report = analizar_historial_guardado(HistoryDB())
+    Path("salida").mkdir(exist_ok=True)
+    output = Path("salida/rendimiento_historico.json")
+    output.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(json.dumps(report["resumen"], ensure_ascii=False))
+    print(f"Informe generado: {output}")
