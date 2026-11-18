@@ -43,7 +43,7 @@ def url_lista_rango(inicio: date, fin: date) -> str:
 
 def extraer_id_torneo(href: str) -> str | None:
     """Extrae solo IDs numéricos de rutas oficiales de torneo."""
-    match = re.search(r"/en/tournaments/(\\d+)(?:[/?#]|$)", str(href or ""))
+    match = re.search(r"/en/tournaments/(\d+)(?:[/?#]|$)", str(href or ""))
     return match.group(1) if match else None
 
 
