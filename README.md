@@ -88,3 +88,22 @@ python historial_rendimiento.py
 ```
 
 Genera `salida/rendimiento_historico.json`. Se necesitan capturas repetidas mientras los torneos avanzan; una sola captura final no permite reconstruir el contexto previo. Los partidos que aparecen por primera vez en una misma captura comparten el último contexto previo observado. El análisis sigue siendo un proxy competitivo, no una medición psicológica.
+
+
+## Backfill del archivo histórico oficial
+
+`backfill_historico.py` recorre el listado oficial por días, sigue la paginación observada y descarga la ficha de cada torneo encontrado. Reutiliza el extractor oficial de grupos, resultados, ratings y calendario; reconstruye la secuencia de partidos y guarda cada torneo usando su fecha oficial como marca temporal estable. Repetir un rango actualiza el mismo snapshot en vez de crear una captura duplicada.
+
+### Ejecución
+
+Variables:
+- `HISTORICAL_FROM`: inicio inclusivo, `YYYY-MM-DD`.
+- `HISTORICAL_TO`: fin inclusivo, `YYYY-MM-DD`.
+- `MAX_HISTORICAL_TOURNAMENTS`: límite por ejecución (500 por defecto).
+- `HISTORICAL_PAUSE_SECONDS`: pausa entre fichas (0.25 s por defecto).
+
+Desde GitHub Actions, ejecuta manualmente **Backfill histórico oficial** y suministra el rango. Antes debes configurar el secreto `DATABASE_URL` con la conexión PostgreSQL persistente; el workflow se detiene si falta, para no aparentar que los datos quedan guardados cuando SQLite de Actions se elimina al terminar el trabajo. El diagnóstico JSON se conserva como artefacto durante 14 días.
+
+El backfill es reanudable por rangos: si se interrumpe, vuelve a ejecutar el mismo intervalo o uno menor. El informe indica torneos encontrados/guardados, grupos completos y partidos reconstruidos. Una ficha sin fecha oficial se conserva en el diagnóstico pero no se inserta como histórico.
+
+**Límites de cobertura:** el recolector depende de que el listado público permita consultar ese día y de que la ficha siga disponible. La paginación se sigue hasta `MAX_PAGINAS`; por tanto, los conteos del informe son cobertura observada, no una garantía de que el archivo completo de todos los años se haya descargado. La reconstrucción competitiva utiliza el orden y marcadores publicados; no mide presión psicológica.
