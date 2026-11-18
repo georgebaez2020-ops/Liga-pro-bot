@@ -65,10 +65,12 @@ def url_lista(dia_col):
 
 def normalizar_estado(texto):
     texto = (texto or "").lower()
-    for estado, etiquetas in ETIQUETAS_ESTADO.items():
-        if any(re.search(rf"\b{re.escape(etiqueta)}\b", texto) for etiqueta in etiquetas):
-            return estado
-    return "unknown"
+    coincidencias = {
+        estado for estado, etiquetas in ETIQUETAS_ESTADO.items()
+        if any(re.search(rf"\b{re.escape(etiqueta)}\b", texto) for etiqueta in etiquetas)
+    }
+    # Si el texto heredado contiene más de una etiqueta, no adivinar.
+    return coincidencias.pop() if len(coincidencias) == 1 else "unknown"
 
 
 def armar_grupos(filas):
@@ -144,7 +146,9 @@ async def descubrir(page, dia_col, estados_solicitados):
                 continue
             tid = match.group(1)
             estado = normalizar_estado(item.get("text", ""))
-            if estados_solicitados == {"all"} or estado in estados_solicitados:
+            # Con filtros concretos también conservamos los "unknown" para inspección:
+            # es preferible revisar un torneo que descartarlo silenciosamente.
+            if estados_solicitados == {"all"} or estado in estados_solicitados or estado == "unknown":
                 encontrados[tid] = {
                     "id": tid,
                     "estado": estado,
