@@ -41,6 +41,31 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           python -m playwright install --with-deps chromium
+      - name: Probar conexión PostgreSQL desde GitHub Actions
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          python - <<'PY'
+          import os
+          import psycopg
+          from urllib.parse import urlparse
+
+          url = os.environ["DATABASE_URL"]
+          if url.startswith("postgres://"):
+              url = "postgresql://" + url[len("postgres://"):]
+          host = urlparse(url).hostname or "(host no identificado)"
+          try:
+              with psycopg.connect(url, connect_timeout=10) as conn:
+                  with conn.cursor() as cur:
+                      cur.execute("SELECT 1")
+                      cur.fetchone()
+              print("Conexión PostgreSQL desde GitHub Actions: correcta")
+          except Exception as exc:
+              print(f"No se pudo conectar a PostgreSQL (host: {host}).")
+              print(f"Error: {type(exc).__name__}: {str(exc)[:300]}")
+              print("Si DATABASE_URL usa el hostname interno de Render, reemplázala por la External Database URL.")
+              raise
+          PY
       - name: Validar fechas y ejecutar backfill
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
