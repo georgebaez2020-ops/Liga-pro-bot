@@ -9,7 +9,7 @@ import os
 import re
 from collections import defaultdict
 
-SCORE = re.compile(r"^\\s*(\\d+)\\s*:\\s*(\\d+)\\s*$")
+SCORE = re.compile(r"^\s*(\d+)\s*:\s*(\d+)\s*$")
 
 
 def score(cell):
