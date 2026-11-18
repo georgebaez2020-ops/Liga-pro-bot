@@ -6,6 +6,8 @@ on:
       - feature/status-upcoming-live-finished
     paths:
       - 'tablas_scraper.py'
+      - 'analisis_jugadores.py'
+      - 'test_analisis_jugadores.py'
       - '.github/workflows/tablas.yml'
   workflow_dispatch:
     inputs:
