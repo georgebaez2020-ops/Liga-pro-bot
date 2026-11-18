@@ -100,7 +100,7 @@ Variables:
 - `HISTORICAL_FROM`: inicio inclusivo, `YYYY-MM-DD`; por defecto, doce meses calendario antes de la fecha actual en Praga.
 - `HISTORICAL_TO`: fin inclusivo, `YYYY-MM-DD`; por defecto, el día anterior a la fecha actual en Praga.
 - Para una ejecución inicial el 18 de noviembre de 2026, el rango predeterminado es del 18 de noviembre de 2025 al 17 de noviembre de 2026.
-- `MAX_HISTORICAL_TOURNAMENTS`: límite por ejecución (500 por defecto).
+- `MAX_HISTORICAL_TOURNAMENTS`: límite por ejecución (5000 por defecto; el informe marca si se alcanza antes de terminar el rango).
 - `HISTORICAL_PAUSE_SECONDS`: pausa entre fichas (0.25 s por defecto).
 
 Desde GitHub Actions, ejecuta manualmente **Backfill histórico oficial** y suministra el rango. Antes debes configurar el secreto `DATABASE_URL` con la conexión PostgreSQL persistente; el workflow se detiene si falta, para no aparentar que los datos quedan guardados cuando SQLite de Actions se elimina al terminar el trabajo. El diagnóstico JSON se conserva como artefacto durante 14 días.
