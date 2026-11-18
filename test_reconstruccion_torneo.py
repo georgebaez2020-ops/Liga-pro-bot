@@ -1,5 +1,5 @@
 import unittest
-from reconstruccion_torneo import parsear_detalle_oficial, reconstruir_secuencia
+from reconstruccion_torneo import (\n    consolidar_partidos_torneo, parsear_detalle_oficial, reconstruir_secuencia,\n)
 
 
 class ReconstruccionTests(unittest.TestCase):
@@ -301,6 +301,31 @@ Player D
         self.assertIsNone(parsed["partidos"][0]["marcador_sets"])
         self.assertEqual(parsed["partidos"][1]["estado"], "planned")
         self.assertIsNone(parsed["partidos"][1]["marcador_sets"])
+
+    def test_consolidates_official_schedule_for_prediction_engine(self):
+        analyses = [{
+            "grupo": 1,
+            "partidos_ficha": [
+                {"orden": 1, "estado": "finished", "jugador_a": "A", "jugador_b": "B"},
+                {"orden": 2, "estado": "live", "jugador_a": "C", "jugador_b": "D"},
+                {"orden": 3, "estado": "planned", "jugador_a": "A", "jugador_b": "C"},
+            ],
+            "rating_por_jugador": {"A": {"rating_final": 600, "variacion": 5}},
+        }]
+        result = consolidar_partidos_torneo(analyses)
+        self.assertEqual(len(result["partidos"]), 3)
+        self.assertEqual(len(result["partidos_programados"]), 1)
+        self.assertEqual(len(result["partidos_en_vivo"]), 1)
+        self.assertEqual(len(result["partidos_finalizados"]), 1)
+        self.assertEqual(result["partidos_programados"][0]["grupo"], 1)
+        self.assertEqual(result["rating_por_jugador"]["A"]["rating_final"], 600)
+
+    def test_consolidates_schedule_without_group_table(self):
+        result = consolidar_partidos_torneo([], [
+            {"orden": 1, "estado": "upcoming", "jugador_a": "A", "jugador_b": "B"}
+        ])
+        self.assertEqual(len(result["partidos_programados"]), 1)
+        self.assertIsNone(result["partidos_programados"][0]["grupo"])
 
 
 if __name__ == "__main__":
