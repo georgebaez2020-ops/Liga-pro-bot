@@ -121,7 +121,7 @@ def main():
         json.dump(result, f, ensure_ascii=False, indent=2)
     with open("salida/jugadores.csv", "w", newline="", encoding="utf-8") as f:
         fields = ["jugador", "partidos", "victorias", "derrotas", "porcentaje_victorias",
-                  "rating_promedio_observado", "torneos"]
+                  "rating_promedio_observado", "marcadores_incompletos", "torneos"]
         writer = csv.DictWriter(f, fieldnames=fields)
         writer.writeheader()
         for p in result["jugadores"]:
