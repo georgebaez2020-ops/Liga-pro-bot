@@ -135,6 +135,11 @@ async def ejecutar(inicio: date, fin: date, max_torneos: int, pausa: float) -> d
         dia = inicio
         while dia <= fin and len(ids_vistos) < max_torneos:
             resultado["resumen"]["dias_consultados"] += 1
+            print(
+                f"[backfill] Día {resultado['resumen']['dias_consultados']}: "
+                f"{dia.isoformat()} | torneos identificados hasta ahora: {len(ids_vistos)}",
+                flush=True,
+            )
             try:
                 descubrimiento = await descubrir_fecha(page, dia)
                 torneos = descubrimiento["torneos"]
@@ -153,8 +158,29 @@ async def ejecutar(inicio: date, fin: date, max_torneos: int, pausa: float) -> d
                     continue
                 ids_vistos.add(tid)
                 resultado["resumen"]["torneos_encontrados"] += 1
+                print(
+                    f"[backfill] Extrayendo torneo {tid} "
+                    f"({resultado['resumen']['torneos_encontrados']}/"
+                    f"{max_torneos})",
+                    flush=True,
+                )
                 try:
-                    dato = await extraer(page, torneo)
+                    dato = None
+                    for intento in range(1, 4):
+                        try:
+                            dato = await extraer(page, torneo)
+                            break
+                        except Exception as exc:
+                            es_timeout = "timeout" in type(exc).__name__.casefold()
+                            if not es_timeout or intento == 3:
+                                raise
+                            espera = 2 ** intento
+                            print(
+                                f"[backfill] Timeout en torneo {tid}; "
+                                f"reintento {intento + 1}/3 en {espera}s",
+                                flush=True,
+                            )
+                            await asyncio.sleep(espera)
                     dato["estado"] = "finished"
                     dato["origen_historico"] = "archivo público oficial; ficha del torneo"
                     dato["fecha_consulta_archivo"] = dia.isoformat()
