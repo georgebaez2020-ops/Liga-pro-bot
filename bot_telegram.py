@@ -77,7 +77,9 @@ async def calendario(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lines = ["🗓️ CALENDARIO OFICIAL"]
         for game in games[:35]:
             a, b = game.get("jugador_a", "?"), game.get("jugador_b", "?")
-            lines.append(f"• {game.get('estado','?').upper()} | {a} vs {b} | Grupo {game.get('grupo') or '—'} | Hora {game.get('hora') or '—'}")
+            hora_co = game.get("hora_colombia") or "—"
+            hora_pr = game.get("hora_praga") or game.get("hora") or "—"
+            lines.append(f"• {game.get('estado','?').upper()} | {a} vs {b} | Grupo {game.get('grupo') or '—'} | Colombia {hora_co} | Praga {hora_pr}")
         await _reply(update, "\n".join(lines))
     except Exception as exc:
         logging.exception("Error en /calendario")
