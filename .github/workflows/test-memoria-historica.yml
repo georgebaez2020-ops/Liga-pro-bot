@@ -1,0 +1,30 @@
+name: Tests memoria historica
+
+on:
+  push:
+    branches:
+      - feature/status-upcoming-live-finished
+    paths:
+      - 'db.py'
+      - 'test_db.py'
+      - 'test_analisis_jugadores.py'
+      - 'requirements.txt'
+      - '.github/workflows/test-memoria-historica.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/status-upcoming-live-finished
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Instalar dependencias de base de datos
+        run: pip install "psycopg[binary]==3.2.6"
+      - name: Ejecutar pruebas
+        run: python -m unittest -v test_analisis_jugadores.py test_db.py
