@@ -212,8 +212,30 @@ async def extraer(page, torneo):
             "advertencias_extraccion": extraido["advertencias"],
         })
     calendario = consolidar_partidos_torneo(analisis_cronologico, partidos_ficha_sin_grupo)
+    # La fecha se toma de la ficha oficial; las horas de Tournament games
+    # corresponden a la hora local de la competición (Praga).
+    fecha_torneo = next(
+        (x.get("fecha_torneo") for x in analisis_cronologico if x.get("fecha_torneo")),
+        None,
+    )
+    if not fecha_torneo and not grupos:
+        fecha_torneo = extraido.get("fecha_torneo")
+    for partido in calendario["partidos"]:
+        partido["fecha"] = fecha_torneo
+        partido["zona_horaria"] = "Europe/Prague" if fecha_torneo else None
+        hora = partido.get("hora")
+        if fecha_torneo and isinstance(hora, str) and re.fullmatch(r"\\d{1,2}:\\d{2}", hora):
+            try:
+                local = datetime.fromisoformat(f"{fecha_torneo}T{hora}").replace(tzinfo=PRAGA)
+                partido["scheduled_at"] = local.isoformat(timespec="minutes")
+            except ValueError:
+                partido["scheduled_at"] = None
+        else:
+            partido["scheduled_at"] = None
     return {
         **torneo,
+        "fecha_torneo": fecha_torneo,
+        "zona_horaria": "Europe/Prague" if fecha_torneo else None,
         **calendario,
         "grupos": grupos,
         "detalle_texto": detalle_texto,
