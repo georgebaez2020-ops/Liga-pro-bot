@@ -1,6 +1,7 @@
 name: Tests memoria historica
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - feature/status-upcoming-live-finished
