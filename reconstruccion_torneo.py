@@ -272,6 +272,23 @@ def parsear_detalle_oficial(texto, grupo):
                             "variacion": int(re.sub(r"\s", "", delta_text)),
                         }
                     break
+        # En torneos Upcoming puede no existir tabla de grupos. En ese caso,
+        # reconstruye el roster únicamente desde la sección oficial Players.
+        # No se inventan jugadores ni se emparejan partidos por orden.
+        if not grupo:
+            for i in range(1, len(section) - 2):
+                games, final_rating, delta_text = section[i:i + 3]
+                if re.fullmatch(r"\d+\s*\([^)]*\)", games) and re.fullmatch(r"\d+", final_rating):
+                    if re.fullmatch(r"[+-]", delta_text) and i + 3 < len(section) and re.fullmatch(r"\d+", section[i + 3]):
+                        delta_text += section[i + 3]
+                    if re.fullmatch(r"[+-]\s*\d+", delta_text):
+                        name = section[i - 1].strip()
+                        if name and name.casefold() not in {"players", "group"}:
+                            ratings.setdefault(final_rating, []).append(name)
+                            rating_data[name] = {
+                                "rating_final": int(final_rating),
+                                "variacion": int(re.sub(r"\s", "", delta_text)),
+                            }
     except StopIteration:
         pass
 
