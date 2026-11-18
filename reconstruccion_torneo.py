@@ -322,11 +322,40 @@ def parsear_detalle_oficial(texto, grupo):
             i = j + 4
             continue
         score = None
+        puntos_sets_a, puntos_sets_b = [], []
+        next_i = j + 4
         if status == "finished":
-            if j + 5 < len(lines) and re.fullmatch(r"\d+", lines[j + 4]) and re.fullmatch(r"\d+", lines[j + 5]):
-                score = f"{lines[j + 4]}:{lines[j + 5]}"
-            else:
-                warnings.append({"hora": hour, "motivo": "partido marcado FINISHED sin marcador completo"})
+            # La tarjeta oficial organiza los datos por filas:
+            # sets ganados A, puntos de cada set A, sets ganados B,
+            # puntos de cada set B.
+            nums = []
+            k = j + 4
+            while k < len(lines) and len(nums) < 12 and re.fullmatch(r"\d+", lines[k]):
+                nums.append(int(lines[k]))
+                k += 1
+            parsed = False
+            if nums and 0 <= nums[0] <= 3:
+                sets_a = nums[0]
+                for sets_b in range(0, 4):
+                    nsets = sets_a + sets_b
+                    needed = 2 + 2 * nsets
+                    if 3 <= nsets <= 5 and len(nums) >= needed and nums[1 + nsets] == sets_b and (sets_a == 3 or sets_b == 3):
+                        candidate_a = nums[1:1 + nsets]
+                        candidate_b = nums[2 + nsets:2 + 2 * nsets]
+                        if all(0 <= x <= 30 for x in candidate_a + candidate_b):
+                            puntos_sets_a, puntos_sets_b = candidate_a, candidate_b
+                            score = f"{sets_a}:{sets_b}"
+                            next_i = j + 4 + needed
+                            parsed = True
+                            break
+            if not parsed:
+                # Compatibilidad con páginas/fixtures antiguos que solo muestran
+                # el total de sets y no los puntos individuales.
+                if j + 5 < len(lines) and re.fullmatch(r"\d+", lines[j + 4]) and re.fullmatch(r"\d+", lines[j + 5]):
+                    score = f"{lines[j + 4]}:{lines[j + 5]}"
+                    next_i = j + 6
+                else:
+                    warnings.append({"hora": hour, "motivo": "partido marcado FINISHED sin marcador completo"})
         elif status == "live":
             # Un marcador parcial en vivo no se registra como resultado final.
             pass
@@ -334,9 +363,13 @@ def parsear_detalle_oficial(texto, grupo):
             "orden": len(matches) + 1, "hora": hour, "estado": status,
             "jugador_a": a_list[0], "jugador_b": b_list[0],
             "nombre_a_en_ficha": name1, "nombre_b_en_ficha": name2,
-            "marcador_sets": score, "fase": stage,
+            "marcador_sets": score, "puntos_sets_a": puntos_sets_a,
+            "puntos_sets_b": puntos_sets_b,
+            "puntos_juego_a": sum(puntos_sets_a) if puntos_sets_a else None,
+            "puntos_juego_b": sum(puntos_sets_b) if puntos_sets_b else None,
+            "fase": stage,
         })
-        i = j + (6 if score is not None else 4)
+        i = next_i
     return {
         "partidos": matches, "rating_por_jugador": rating_data,
         "advertencias": warnings,
