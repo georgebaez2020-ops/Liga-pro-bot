@@ -28,4 +28,6 @@ jobs:
           python -m unittest -v \
             test_servicio_pronosticos.py \
             tests/test_motor_pronosticos.py \
-            tests/test_retroalimentacion.py
+            tests/test_retroalimentacion.py \
+            test_db.py \
+            test_backfill_historico.py
