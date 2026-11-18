@@ -31,8 +31,7 @@ class ReconstruccionTests(unittest.TestCase):
         self.assertEqual(report["rating_por_jugador"]["B"]["variacion_torneo"], -8)
 
     def test_rejects_duplicate_pair_and_warns(self):
-        matches = self.matches + [self.matches[0]]
-        report = reconstruir_secuencia(self.players, matches)
+        report = reconstruir_secuencia(self.players, self.matches + [self.matches[0]])
         self.assertEqual(report["partidos_reconstruidos"], 6)
         self.assertTrue(any("duplicado" in x["motivo"] for x in report["advertencias"]))
 
@@ -42,27 +41,110 @@ class ReconstruccionTests(unittest.TestCase):
         self.assertEqual(report["partidos_reconstruidos"], 5)
         self.assertFalse(report["completa"])
 
-    def test_parses_official_players_rating_and_games(self):
+    def test_parses_multiline_official_finished_matches(self):
         group = [
-            {"jugador": "Biolek Martin", "rating": "1090"},
-            {"jugador": "Szotkowski Jan", "rating": "1070"},
-            {"jugador": "Dzida Jan", "rating": "1076"},
-            {"jugador": "Zika Tadeas", "rating": "1081"},
+            {"jugador": "Picek Petr", "rating": "614"},
+            {"jugador": "Stefek Martin", "rating": "558"},
+            {"jugador": "Smrcek Milan", "rating": "616"},
+            {"jugador": "Andrle Tomas", "rating": "577"},
         ]
-        page_text = (
-            "Players Player Games Rating +/- "
-            "Dzida Jan 1 4 (3-1) 1076 + 12 "
-            "Zika Tadeas 2 4 (2-2) 1081 + 2 "
-            "Szotkowski Jan 3 4 (2-2) 1070 + 8 "
-            "Biolek Martin 4 4 (1-3) 1090 - 21 "
-            "Group 12 Nov 2026 Tournament games Group "
-            "Finished 16:00 (1090)Biolek M(1070)Szotkowski J 1 3 "
-            "Finished 16:30 (1076)Dzida J(1081)Zika T 0 3"
-        )
+        page_text = """Players
+#
+PLAYER
+GAMES
+RATING
++/-
+-
+Picek Petr
+4 (1-3)
+614
+- 10
+-
+Stefek Martin
+4 (2-2)
+558
++ 3
+-
+Smrcek Milan
+4 (2-2)
+616
++ 8
+-
+Andrle Tomas
+4 (3-1)
+577
++ 12
+Group
+Tournament games
+Group
+FINISHED
+23:59
+(614)
+Picek P
+(558)
+Stefek M
+1
+3
+FINISHED
+00:30
+(616)
+Smrcek M
+(577)
+Andrle T
+0
+3
+for 3rd place
+FINISHED
+05:00
+(616)
+Smrcek M
+(558)
+Stefek M
+3
+1
+Final
+FINISHED
+05:29
+(577)
+Andrle T
+(614)
+Picek P
+3
+1
+"""
         parsed = parsear_detalle_oficial(page_text, group)
-        self.assertEqual(len(parsed["partidos"]), 2)
-        self.assertEqual(parsed["partidos"][0]["jugador_a"], "Biolek Martin")
-        self.assertEqual(parsed["rating_por_jugador"]["Biolek Martin"]["variacion"], -21)
+        self.assertEqual(len(parsed["partidos"]), 4)
+        self.assertEqual(parsed["partidos"][0]["jugador_a"], "Picek Petr")
+        self.assertEqual(parsed["partidos"][0]["marcador_sets"], "1:3")
+        self.assertEqual(parsed["partidos"][2]["fase"], "third_place")
+        self.assertEqual(parsed["partidos"][3]["fase"], "final")
+        self.assertEqual(parsed["rating_por_jugador"]["Andrle Tomas"]["variacion"], 12)
+
+    def test_live_partial_score_is_not_treated_as_finished(self):
+        group = [{"jugador": "A", "rating": "384"}, {"jugador": "B", "rating": "366"},
+                 {"jugador": "C", "rating": "313"}, {"jugador": "D", "rating": "409"}]
+        page_text = """Tournament games
+Group
+LIVE
+08:00
+(384)
+Player A
+(366)
+Player B
+1
+2
+PLANNED
+08:30
+(313)
+Player C
+(409)
+Player D
+"""
+        parsed = parsear_detalle_oficial(page_text, group)
+        self.assertEqual(parsed["partidos"][0]["estado"], "live")
+        self.assertIsNone(parsed["partidos"][0]["marcador_sets"])
+        self.assertEqual(parsed["partidos"][1]["estado"], "planned")
+        self.assertIsNone(parsed["partidos"][1]["marcador_sets"])
 
 
 if __name__ == "__main__":
