@@ -228,6 +228,9 @@ async def extraer(page, torneo):
             try:
                 local = datetime.fromisoformat(f"{fecha_torneo}T{hora}").replace(tzinfo=PRAGA)
                 partido["scheduled_at"] = local.isoformat(timespec="minutes")
+                partido["hora_praga"] = local.strftime("%H:%M")
+                partido["hora_colombia"] = local.astimezone(COL).strftime("%H:%M")
+                partido["fecha_colombia"] = local.astimezone(COL).date().isoformat()
             except ValueError:
                 partido["scheduled_at"] = None
         else:
