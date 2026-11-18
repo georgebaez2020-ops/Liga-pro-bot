@@ -127,6 +127,16 @@ def pronosticar_partido(snapshots, jugador_a, jugador_b, fecha_partido=None,
         counts[kb] += 1
     n_a, n_b = counts[a], counts[b]
     h2h = _h2h_before(matches, a, b)
+    recent = {a: [], b: []}
+    for match in matches:
+        ka, kb = _key(match["jugador_a"]), _key(match["jugador_b"])
+        if ka in recent:
+            recent[ka].append(1.0 if match["sets_a"] > match["sets_b"] else 0.0)
+        if kb in recent:
+            recent[kb].append(1.0 if match["sets_b"] > match["sets_a"] else 0.0)
+    form_a_rows, form_b_rows = recent[a][-10:], recent[b][-10:]
+    form_a = sum(form_a_rows) / len(form_a_rows) if form_a_rows else 0.5
+    form_b = sum(form_b_rows) / len(form_b_rows) if form_b_rows else 0.5
     if min(n_a, n_b) < minimo_partidos:
         return {
             "elegible": False, "motivo": "muestra_historica_insuficiente",
@@ -141,6 +151,11 @@ def pronosticar_partido(snapshots, jugador_a, jugador_b, fecha_partido=None,
     h2h_rate = (h2h_wins_a + 2.0) / (h2h_n + 4.0)
     h2h_weight = min(0.08, h2h_n / 50.0)
     probability_a = (1.0 - h2h_weight) * raw + h2h_weight * h2h_rate
+    # Forma reciente (ultimos 10 resultados previos al corte): peso maximo 10%,
+    # reducido proporcionalmente si la muestra de cualquiera es menor de 10.
+    form_weight = 0.10 * min(1.0, len(form_a_rows) / 10.0, len(form_b_rows) / 10.0)
+    form_signal = 0.5 + (form_a - form_b) / 2.0
+    probability_a = (1.0 - form_weight) * probability_a + form_weight * form_signal
     # La contraccion evita extremos cuando hay poca experiencia individual.
     experience = min(1.0, min(n_a, n_b) / 20.0)
     probability_a = 0.5 + (probability_a - 0.5) * (0.55 + 0.45 * experience)
@@ -161,8 +176,11 @@ def pronosticar_partido(snapshots, jugador_a, jugador_b, fecha_partido=None,
         "rating_elo_a": round(elo_a, 1), "rating_elo_b": round(elo_b, 1),
         "partidos_historicos_a": n_a, "partidos_historicos_b": n_b,
         "h2h_partidos": h2h_n, "h2h_victorias_a": h2h_wins_a,
+        "forma_ultimos_10_a": {"partidos": len(form_a_rows), "victorias": int(sum(form_a_rows)), "tasa": round(form_a, 3) if form_a_rows else None},
+        "forma_ultimos_10_b": {"partidos": len(form_b_rows), "victorias": int(sum(form_b_rows)), "tasa": round(form_b, 3) if form_b_rows else None},
+        "peso_forma_reciente": round(form_weight, 3),
         "nivel_confianza": level, "confianza_muestra": confidence,
-        "metodo": "Elo cronologico + H2H contraido + contraccion por experiencia",
+        "metodo": "Elo cronologico + H2H contraido + forma reciente (max 10%) + contraccion por experiencia",
         "advertencia": "Probabilidad exploratoria; no calibrada ni validada aun con backtesting fuera de muestra.",
     }
 
