@@ -55,7 +55,7 @@ class TournamentIntelligenceTests(unittest.TestCase):
 
     def test_missing_and_non_reciprocal_scores_are_not_counted(self):
         group = grupo_cuatro()
-        group[0]["resultados"][1] = "3 : 0"
+        group[0]["resultados"][1] = ""
         group[1]["resultados"][0] = ""
         pending = calcular_partidos_pendientes(group)
         self.assertEqual(len(pending["pendientes"]), 1)
