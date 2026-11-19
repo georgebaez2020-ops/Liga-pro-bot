@@ -267,14 +267,29 @@ def _detalle_torneo(tid, tournament):
                 f"{match.get('jugador_b', '?')} | Grupo {match.get('grupo') or '—'}"
             )
     analyses = tournament.get("analisis_cronologico") or []
-    for analysis in analyses:
-        number = analysis.get("grupo", "?")
-        lines.append(f"\n📋 TABLA — GRUPO {number}")
-        lines.append(_tabla_grupo_texto(analysis))
-    if not analyses and tournament.get("grupos"):
-        lines.append("\nLa ficha tiene jugadores, pero todavía no hay una tabla reconstruible.")
-        for number, group in enumerate(tournament.get("grupos") or [], 1):
-            lines.append(f"Grupo {number}: " + ", ".join(p.get("jugador", "?") for p in group))
+    groups = tournament.get("grupos") or []
+    if groups:
+        for number, group in enumerate(groups, 1):
+            lines.append(f"\n📋 TABLA OFICIAL — GRUPO {number}")
+            official = _tabla_oficial_grupo_texto(group)
+            if official:
+                lines.append(official)
+            else:
+                analysis = next(
+                    (item for item in analyses if str(item.get("grupo")) == str(number)),
+                    None,
+                )
+                lines.append(
+                    _tabla_grupo_texto(analysis) if analysis
+                    else "La ficha oficial todavía no publica resultados para esta tabla."
+                )
+    elif analyses:
+        for analysis in analyses:
+            number = analysis.get("grupo", "?")
+            lines.append(f"\n📋 TABLA RECONSTRUIDA — GRUPO {number}")
+            lines.append(_tabla_grupo_texto(analysis))
+    else:
+        lines.append("\nLa ficha oficial todavía no publica grupos ni una tabla de clasificación.")
     if not matches and not tournament.get("grupos"):
         lines.append("\nLa ficha todavía no publica partidos ni grupos.")
     return "\n".join(lines)
