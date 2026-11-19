@@ -60,6 +60,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/torneos — torneos en vivo y próximos\n"
         "/vivo — torneos que están en juego\n"
         "/proximos — torneos próximos\n"
+        "/torneo ID — tabla y desarrollo de un torneo\n"
         "/pronosticos — análisis conservador de próximos partidos\n"
         "/jugador NOMBRE — histórico de un jugador\n"
         "/necesidad NOMBRE — respuesta histórica cuando debía ganar\n"
@@ -135,6 +136,92 @@ async def proximos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as exc:
         logging.exception("Error en /proximos")
         await _reply(update, f"Error consultando próximos torneos: {type(exc).__name__}: {exc}")
+
+
+def _tabla_grupo_texto(analisis):
+    reconstruction = analisis.get("reconstruccion") or {}
+    sequence = reconstruction.get("secuencia") or []
+    table = sequence[-1].get("tabla_despues") if sequence else reconstruction.get("tabla_final_reconstruida")
+    if not table:
+        return "Tabla todavía sin resultados finalizados."
+    lines = ["Pos | Jugador | PJ | G | P | Pts"]
+    for position, row in enumerate(table, 1):
+        played = int(row.get("victorias", 0)) + int(row.get("derrotas", 0))
+        lines.append(
+            f"{position}. {row.get('jugador', '?')} | {played} | "
+            f"{row.get('victorias', 0)} | {row.get('derrotas', 0)} | {row.get('puntos', 0)}"
+        )
+    if reconstruction.get("empates_finales_no_resueltos"):
+        lines.append("⚠️ Hay empates que requieren criterios oficiales adicionales.")
+    return "\n".join(lines)
+
+
+def _detalle_torneo(tid, tournament):
+    status = str(tournament.get("estado") or "unknown").upper()
+    lines = [
+        f"🏓 TORNEO #{tid} — {status}",
+        f"Fecha: {tournament.get('fecha_torneo') or 'no publicada'}",
+        f"Ficha oficial: https://tt.league-pro.com/en/tournaments/{tid}",
+    ]
+    matches = tournament.get("partidos") or []
+    live = [m for m in matches if m.get("estado") == "live"]
+    upcoming = [m for m in matches if m.get("estado") in {"planned", "upcoming"}]
+    finished = [m for m in matches if m.get("estado") == "finished"]
+    lines.append(
+        f"\n📊 PARTIDOS: 🔴 {len(live)} en vivo | ⏳ {len(upcoming)} pendientes | "
+        f"✅ {len(finished)} finalizados"
+    )
+    if live:
+        lines.append("\n🔴 PARTIDOS EN VIVO")
+        for match in live:
+            lines.append(
+                f"• {match.get('jugador_a', '?')} vs {match.get('jugador_b', '?')} "
+                f"| Grupo {match.get('grupo') or '—'} | marcador parcial no disponible en la extracción"
+            )
+    if upcoming:
+        lines.append("\n⏳ PRÓXIMOS PARTIDOS")
+        for match in upcoming[:20]:
+            lines.append(
+                f"• {match.get('hora_colombia') or match.get('hora') or 'Hora —'} | "
+                f"{match.get('jugador_a', '?')} vs {match.get('jugador_b', '?')} "
+                f"| Grupo {match.get('grupo') or '—'}"
+            )
+    if finished:
+        lines.append("\n✅ ÚLTIMOS RESULTADOS")
+        for match in finished[-20:]:
+            lines.append(
+                f"• {match.get('jugador_a', '?')} {match.get('marcador_sets') or '?'} "
+                f"{match.get('jugador_b', '?')} | Grupo {match.get('grupo') or '—'}"
+            )
+    analyses = tournament.get("analisis_cronologico") or []
+    for analysis in analyses:
+        number = analysis.get("grupo", "?")
+        lines.append(f"\n📋 TABLA — GRUPO {number}")
+        lines.append(_tabla_grupo_texto(analysis))
+    if not analyses and tournament.get("grupos"):
+        lines.append("\nLa ficha tiene jugadores, pero todavía no hay una tabla reconstruible.")
+        for number, group in enumerate(tournament.get("grupos") or [], 1):
+            lines.append(f"Grupo {number}: " + ", ".join(p.get("jugador", "?") for p in group))
+    if not matches and not tournament.get("grupos"):
+        lines.append("\nLa ficha todavía no publica partidos ni grupos.")
+    return "\n".join(lines)
+
+
+async def torneo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await _reply(update, "Uso: /torneo ID\nEjemplo: /torneo 123456")
+        return
+    tid = context.args[0].strip().rstrip("/").split("/")[-1]
+    try:
+        _, _, tournaments = cargar_estado()
+        tournament = tournaments.get(tid)
+        if not tournament:
+            await _reply(update, f"No encuentro el torneo #{tid} en la última extracción. Revisa /vivo o /proximos y vuelve a intentarlo.")
+            return
+        await _reply(update, _detalle_torneo(tid, tournament))
+    except Exception as exc:
+        logging.exception("Error consultando detalle del torneo %s", tid)
+        await _reply(update, f"Error consultando torneo: {type(exc).__name__}: {exc}")
 
 
 async def pronosticos(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -344,6 +431,8 @@ def main():
     app.add_handler(CommandHandler("torneos", torneos))
     app.add_handler(CommandHandler("vivo", vivo))
     app.add_handler(CommandHandler("proximos", proximos))
+    app.add_handler(CommandHandler("torneo", torneo))
+    app.add_handler(CommandHandler("tabla", torneo))
     app.add_handler(CommandHandler("pronosticos", pronosticos))
     app.add_handler(CommandHandler("jugador", jugador))
     app.add_handler(CommandHandler("necesidad", necesidad))
