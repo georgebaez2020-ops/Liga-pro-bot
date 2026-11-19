@@ -106,7 +106,7 @@ class HistoricalPressureTests(unittest.TestCase):
             "tournament_id": "T9", "captured_at": "2026-11-18T08:00:00Z",
             "payload": payload,
         }])
-        self.assertEqual(result["resumen"]["jugadores_obligados_a_ganar"], 1)
+        self.assertEqual(result["resumen"]["casos_jugador_partido_obligado_a_ganar"], 1)
         self.assertEqual(result["jugadores"][0]["jugador"], "A")
         self.assertEqual(result["jugadores"][0]["victorias"], 1)
         self.assertEqual(result["jugadores"][0]["tasa_victoria"], 1.0)
