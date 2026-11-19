@@ -33,8 +33,8 @@ class EnriquecerMarcadoresLiveTests(unittest.IsolatedAsyncioTestCase):
         url_ok = "https://tt.league-pro.com/en/tournaments/123/456"
         url_ambiguous = "https://tt.league-pro.com/en/tournaments/123/457"
         page = _Page({
-            url_ok: "Match\\nFranek T\\n1:2\\nSkakal M\\n",
-            url_ambiguous: "Match\\nHrabec J\\n0:1\\nHrabec Jan\\n",
+            url_ok: "Match\nFranek T\n1:2\nSkakal M\n",
+            url_ambiguous: "Match\nHrabec J\n0:1\nHrabec Jan\n",
         })
         matches = [
             {"estado": "live", "jugador_a": "Franek Tomas", "jugador_b": "Skakal Martin"},
