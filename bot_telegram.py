@@ -48,11 +48,27 @@ def _torneo_es_del_dia_colombia(data, fecha_desde, fecha_hasta):
 
 def _torneos_por_estado(tournaments, wanted):
     fecha_desde, fecha_hasta = _rango_torneo_hoy()
-    return [
-        (str(tid), data) for tid, data in tournaments.items()
-        if str(data.get("estado") or "unknown").casefold() in wanted
-        and _torneo_es_del_dia_colombia(data, fecha_desde, fecha_hasta)
-    ]
+    rows = []
+    for tid, data in tournaments.items():
+        status = str(data.get("estado") or "unknown").casefold()
+        if status not in wanted:
+            continue
+        if not _torneo_es_del_dia_colombia(data, fecha_desde, fecha_hasta):
+            continue
+
+        # Regla de seguridad para /vivo: no confiar solo en la etiqueta
+        # general del torneo. Debe existir al menos un partido LIVE real
+        # en el calendario de la ficha; si no, nunca se muestra como en vivo.
+        if "live" in wanted:
+            matches = data.get("partidos") or []
+            has_live_match = any(
+                str(match.get("estado") or "").casefold() == "live"
+                for match in matches
+            )
+            if not has_live_match:
+                continue
+        rows.append((str(tid), data))
+    return rows
 
 
 def _formatear_torneos(tournaments, wanted, heading):
