@@ -233,6 +233,28 @@ async def torneo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await _reply(update, f"Error consultando torneo: {type(exc).__name__}: {exc}")
 
 
+def _tabla_oficial_grupo_texto(grupo):
+    """Formatea la tabla publicada en las filas oficiales de jugadores."""
+    if not grupo:
+        return None
+    lines = ["Pos | Jugador | Resultados | Sets | Balls | Pts | Puesto"]
+    count = 0
+    for player in grupo:
+        name = str(player.get("jugador") or "").strip()
+        if not name:
+            continue
+        results = player.get("resultados") or []
+        result_text = " ".join(str(value) for value in results) if results else "—"
+        values = [
+            player.get("pos") or "—", name, result_text,
+            player.get("sets") or "—", player.get("balls") or "—",
+            player.get("points") or "—", player.get("place") or "—",
+        ]
+        lines.append(" | ".join(str(value) for value in values))
+        count += 1
+    return "\n".join(lines) if count else None
+
+
 async def tabla(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Muestra exclusivamente la clasificación por grupos de un torneo."""
     if not context.args:
@@ -265,25 +287,32 @@ async def tabla(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"Fecha: {tournament.get('fecha_torneo') or 'no publicada'}",
             f"Ficha oficial: https://tt.league-pro.com/en/tournaments/{tid}",
         ]
+        groups = tournament.get("grupos") or []
         analyses = tournament.get("analisis_cronologico") or []
-        if analyses:
+        if groups:
+            for number, group in enumerate(groups, 1):
+                lines.append(f"\\n📋 GRUPO {number} — TABLA OFICIAL")
+                official_table = _tabla_oficial_grupo_texto(group)
+                if official_table:
+                    lines.append(official_table)
+                else:
+                    analysis = next(
+                        (item for item in analyses if str(item.get("grupo")) == str(number)),
+                        None,
+                    )
+                    lines.append(
+                        _tabla_grupo_texto(analysis) if analysis
+                        else "La ficha no publica todavía resultados de este grupo."
+                    )
+        elif analyses:
             for analysis in analyses:
-                lines.append(f"\n📋 GRUPO {analysis.get('grupo', '?')}")
+                lines.append(f"\\n📋 GRUPO {analysis.get('grupo', '?')}")
                 lines.append(_tabla_grupo_texto(analysis))
         else:
-            groups = tournament.get("grupos") or []
-            if groups:
-                for number, group in enumerate(groups, 1):
-                    lines.append(f"\n📋 GRUPO {number}")
-                    lines.append("Tabla todavía sin resultados finalizados.")
-                    names = [str(player.get("jugador") or "?") for player in group]
-                    if names:
-                        lines.append("Jugadores: " + ", ".join(names))
-            else:
-                lines.append(
-                    "\nLa ficha oficial todavía no publica grupos ni una tabla de clasificación. "
-                    "En los torneos próximos puede que la clasificación aún no esté disponible."
-                )
+            lines.append(
+                "\\nLa ficha oficial todavía no publica grupos ni una tabla de clasificación. "
+                "En los torneos próximos puede que la clasificación aún no esté disponible."
+            )
 
         lines.append(
             "\nNota: la clasificación se reconstruye con partidos finalizados; "
