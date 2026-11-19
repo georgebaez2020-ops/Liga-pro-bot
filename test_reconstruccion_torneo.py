@@ -358,6 +358,14 @@ Stefek M
         self.assertEqual(parsed["partidos"][0]["jugador_b"], "Stefek Martin")
         self.assertEqual(parsed["rating_por_jugador"]["Picek Petr"]["rating_final"], 614)
 
+    def test_parses_only_unambiguous_live_set_score(self):
+        from reconstruccion_torneo import parsear_marcador_sets_live
+        self.assertEqual(parsear_marcador_sets_live("Match\\nLive\\nPlayer A\\n1:2\\nPlayer B"), "1:2")
+        self.assertIsNone(parsear_marcador_sets_live("Match\\nLive\\n0:0\\nPlayer A"))
+        self.assertIsNone(parsear_marcador_sets_live("Live\\n1:2\\nCurrent matches\\n0:1"))
+        self.assertIsNone(parsear_marcador_sets_live("Live\\nDuration: 0 min"))
+
+
     def test_live_partial_score_is_not_treated_as_finished(self):
         group = [{"jugador": "A", "rating": "384"}, {"jugador": "B", "rating": "366"},
                  {"jugador": "C", "rating": "313"}, {"jugador": "D", "rating": "409"}]
