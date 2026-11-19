@@ -58,9 +58,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/estado — estado de la memoria y torneos\n"
         "/calendario — partidos programados y en vivo\n"
         "/torneos — torneos en vivo y próximos\n"
-        "/vivo — partidos y marcadores en directo\n"
-        "/proximos — partidos programados\n"
-        "/torneo ID — tabla y desarrollo de un torneo\n"
+        "/vivo — torneos que están en directo\n"
+        "/proximos — torneos próximos\n"
+        "/torneo NUMERO — partidos y desarrollo de un torneo\n"
+        "/tabla NUMERO — clasificación por grupos del torneo\n"
         "/pronosticos — análisis conservador de próximos partidos\n"
         "/jugador NOMBRE — histórico de un jugador\n"
         "/necesidad NOMBRE — respuesta histórica cuando debía ganar\n"
@@ -227,6 +228,68 @@ async def torneo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as exc:
         logging.exception("Error consultando detalle del torneo %s", tid)
         await _reply(update, f"Error consultando torneo: {type(exc).__name__}: {exc}")
+
+
+async def tabla(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Muestra exclusivamente la clasificación por grupos de un torneo."""
+    if not context.args:
+        await _reply(
+            update,
+            "Uso: /tabla NUMERO\\nEjemplo: /tabla 38185\\n"
+            "Puedes copiar el número desde /vivo o /proximos."
+        )
+        return
+
+    tid = context.args[0].strip().rstrip("/").split("/")[-1]
+    if not tid.isdigit():
+        await _reply(update, "El identificador debe ser numérico. Ejemplo: /tabla 38185")
+        return
+
+    try:
+        _, _, tournaments = cargar_estado()
+        tournament = tournaments.get(tid)
+        if not tournament:
+            await _reply(
+                update,
+                f"No encuentro el torneo #{tid} en la última extracción. "
+                "Consulta /vivo o /proximos para obtener un identificador vigente."
+            )
+            return
+
+        lines = [
+            f"📊 TABLAS DEL TORNEO #{tid}",
+            f"Estado: {str(tournament.get('estado') or 'unknown').upper()}",
+            f"Fecha: {tournament.get('fecha_torneo') or 'no publicada'}",
+            f"Ficha oficial: https://tt.league-pro.com/en/tournaments/{tid}",
+        ]
+        analyses = tournament.get("analisis_cronologico") or []
+        if analyses:
+            for analysis in analyses:
+                lines.append(f"\\n📋 GRUPO {analysis.get('grupo', '?')}")
+                lines.append(_tabla_grupo_texto(analysis))
+        else:
+            groups = tournament.get("grupos") or []
+            if groups:
+                for number, group in enumerate(groups, 1):
+                    lines.append(f"\\n📋 GRUPO {number}")
+                    lines.append("Tabla todavía sin resultados finalizados.")
+                    names = [str(player.get("jugador") or "?") for player in group]
+                    if names:
+                        lines.append("Jugadores: " + ", ".join(names))
+            else:
+                lines.append(
+                    "\\nLa ficha oficial todavía no publica grupos ni una tabla de clasificación. "
+                    "En los torneos próximos puede que la clasificación aún no esté disponible."
+                )
+
+        lines.append(
+            "\\nNota: la clasificación se reconstruye con partidos finalizados; "
+            "los encuentros LIVE o pendientes no suman puntos."
+        )
+        await _reply(update, "\\n".join(lines))
+    except Exception as exc:
+        logging.exception("Error consultando tabla del torneo %s", tid)
+        await _reply(update, f"Error consultando tabla: {type(exc).__name__}: {exc}")
 
 
 async def pronosticos(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -437,7 +500,7 @@ def main():
     app.add_handler(CommandHandler("vivo", vivo))
     app.add_handler(CommandHandler("proximos", proximos))
     app.add_handler(CommandHandler("torneo", torneo))
-    app.add_handler(CommandHandler("tabla", torneo))
+    app.add_handler(CommandHandler("tabla", tabla))
     app.add_handler(CommandHandler("pronosticos", pronosticos))
     app.add_handler(CommandHandler("jugador", jugador))
     app.add_handler(CommandHandler("necesidad", necesidad))
