@@ -30,17 +30,17 @@ def _torneos_por_estado(tournaments, wanted):
 def _formatear_torneos(tournaments, wanted, heading):
     rows = _torneos_por_estado(tournaments, wanted)
     if not rows:
-        return heading + "\\nNo hay torneos en esta categoría en la última actualización."
+        return heading + "\nNo hay torneos en esta categoría en la última actualización."
     lines = [heading, f"Total: {len(rows)}"]
     for tid, data in sorted(rows, key=lambda item: (str(item[1].get("fecha_torneo") or ""), item[0])):
         status = str(data.get("estado") or "unknown").upper()
         date = data.get("fecha_torneo") or "fecha no publicada"
-        lines.append(f"\\n🏓 Torneo #{tid} — {status}\\nFecha: {date}")
+        lines.append(f"\n🏓 Torneo #{tid} — {status}\nFecha: {date}")
         groups = data.get("grupos") or []
         analyses = data.get("analisis_cronologico") or []
         if groups:
             for number, group in enumerate(groups, 1):
-                lines.append(f"\\n📋 Grupo {number}")
+                lines.append(f"\n📋 Grupo {number}")
                 official = _tabla_oficial_grupo_texto(group)
                 if official:
                     lines.append(official)
@@ -49,12 +49,12 @@ def _formatear_torneos(tournaments, wanted, heading):
                     lines.append(_tabla_grupo_texto(analysis) if analysis else "Tabla aún no publicada.")
         elif analyses:
             for analysis in analyses:
-                lines.append(f"\\n📋 Grupo {analysis.get('grupo', '?')}")
+                lines.append(f"\n📋 Grupo {analysis.get('grupo', '?')}")
                 lines.append(_tabla_grupo_texto(analysis))
         else:
             lines.append("Tabla aún no disponible en la ficha oficial.")
         lines.append(f"Detalle: /torneo {tid} | https://tt.league-pro.com/en/tournaments/{tid}")
-    return "\\n".join(lines)
+    return "\n".join(lines)
 
 
 def _vista_torneos(chat_id, message_id, wanted, heading, text):
