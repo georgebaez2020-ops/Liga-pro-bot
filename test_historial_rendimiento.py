@@ -45,6 +45,25 @@ class HistoricalPressureTests(unittest.TestCase):
         self.assertEqual(result["resumen"]["grupos_con_reconstruccion_completa"], 1)
         self.assertEqual(result["resumen"]["grupos_incompletos_omitidos"], 1)
 
+    def test_complete_reconstruction_does_not_fall_back_when_no_one_must_win(self):
+        payload = {"analisis_cronologico": [{
+            "grupo": 1,
+            "reconstruccion": {"completa": True, "secuencia": [{
+                "necesidad_antes": {
+                    "A": {"debe_ganar_por_puntos_para_seguir_en_fase": False},
+                    "B": {"debe_ganar_por_puntos_para_seguir_en_fase": False},
+                },
+                "cumplio_necesidad": {"A": None, "B": None},
+            }]},
+        }]}
+        result = acumular_historial_presion([{
+            "tournament_id": "T15", "captured_at": "2026-11-18T08:00:00Z",
+            "payload": payload,
+        }])
+        self.assertEqual(result["resumen"]["grupos_con_reconstruccion_completa"], 1)
+        self.assertEqual(result["jugadores"], [])
+        self.assertNotIn("partidos_nuevos_detectados", result["resumen"])
+
     def test_summary_distinguishes_unique_matches_from_player_match_cases(self):
         sequence = [{
             "necesidad_antes": {
