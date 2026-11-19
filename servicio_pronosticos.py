@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import datetime, timezone
+import re
+import unicodedata
 
 from db import HistoryDB
 from historial_rendimiento import acumular_historial_presion
@@ -132,26 +134,57 @@ def informes(db=None):
     }
 
 
+def _normalizar_nombre_busqueda(nombre):
+    """Normaliza acentos, mayúsculas y signos para comparar nombres."""
+    value = unicodedata.normalize("NFKD", str(nombre or "").casefold())
+    value = "".join(char for char in value if not unicodedata.combining(char))
+    return re.findall(r"[a-z0-9]+", value)
+
+
 def buscar_jugador(nombre, db=None):
     data = informes(db)
-    needle = " ".join(str(nombre or "").split()).casefold()
-    if not needle:
+    query_tokens = _normalizar_nombre_busqueda(nombre)
+    if not query_tokens:
         return None
+
     players = data["jugadores"]["jugadores"]
-    exact = [p for p in players if p["jugador"].casefold() == needle]
-    matches = exact or [p for p in players if needle in p["jugador"].casefold()]
-    if not matches:
+    query = " ".join(query_tokens)
+    ranked = []
+    for player in players:
+        player_tokens = _normalizar_nombre_busqueda(player.get("jugador"))
+        if not player_tokens:
+            continue
+        player_ordered = " ".join(player_tokens)
+
+        if player_ordered == query:
+            rank = 0
+        elif len(query_tokens) > 1 and all(
+            token in player_tokens for token in query_tokens
+        ):
+            # Permite "Nombre Apellido" y "Apellido Nombre".
+            rank = 1
+        elif query in player_ordered:
+            rank = 2
+        else:
+            continue
+        ranked.append((rank, player_ordered, player))
+
+    if not ranked:
         return None
-    return matches[:5]
+    ranked.sort(key=lambda item: (item[0], item[1]))
+    return [item[2] for item in ranked[:5]]
 
 
 def buscar_h2h(nombre_a, nombre_b, db=None):
     data = informes(db)
-    keys = {" ".join(nombre_a.split()).casefold(), " ".join(nombre_b.split()).casefold()}
-    if len(keys) != 2:
+    key_a = tuple(sorted(_normalizar_nombre_busqueda(nombre_a)))
+    key_b = tuple(sorted(_normalizar_nombre_busqueda(nombre_b)))
+    if not key_a or not key_b or key_a == key_b:
         return None
     for row in data["jugadores"]["h2h"]:
-        if {row["jugador_a"].casefold(), row["jugador_b"].casefold()} == keys:
+        row_a = tuple(sorted(_normalizar_nombre_busqueda(row.get("jugador_a"))))
+        row_b = tuple(sorted(_normalizar_nombre_busqueda(row.get("jugador_b"))))
+        if {row_a, row_b} == {key_a, key_b}:
             return row
     return None
 

@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from servicio_pronosticos import listar_calendario
+from servicio_pronosticos import listar_calendario, buscar_jugador, buscar_h2h
 from reconstruccion_torneo import parsear_detalle_oficial
 
 
@@ -45,6 +45,37 @@ class PredictionServiceTests(unittest.TestCase):
         self.assertIsNone(parsed["fecha_torneo"])
         self.assertTrue(any("fecha oficial" in x.get("motivo", "") for x in parsed["advertencias"]))
 
+
+    def test_player_search_accepts_name_and_surname_in_either_order(self):
+        profiles = [{"jugador": "Biolek Martin", "global": {"partidos": 6}}]
+        with patch("servicio_pronosticos.informes", return_value={
+            "jugadores": {"jugadores": profiles}
+        }):
+            self.assertEqual(buscar_jugador("Martin Biolek"), profiles)
+            self.assertEqual(buscar_jugador("Biolek Martin"), profiles)
+
+    def test_player_search_is_accent_insensitive(self):
+        profiles = [{"jugador": "Martin Bíolek", "global": {"partidos": 6}}]
+        with patch("servicio_pronosticos.informes", return_value={
+            "jugadores": {"jugadores": profiles}
+        }):
+            self.assertEqual(buscar_jugador("Biolek Martin"), profiles)
+
+
+
+    def test_h2h_accepts_reversed_names_and_accents(self):
+        rows = [{
+            "jugador_a": "Biolek Martin",
+            "jugador_b": "Tomas Konecny",
+            "partidos": 3,
+            "victorias_a": 2,
+            "victorias_b": 1,
+        }]
+        with patch("servicio_pronosticos.informes", return_value={
+            "jugadores": {"h2h": rows}
+        }):
+            self.assertEqual(buscar_h2h("Martin Biolek", "Konecny Tomas"), rows[0])
+            self.assertEqual(buscar_h2h("Bíolek Martin", "Tomas Konecny"), rows[0])
 
 if __name__ == "__main__":
     unittest.main()
