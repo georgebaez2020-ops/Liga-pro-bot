@@ -74,7 +74,7 @@ class PredictionServiceTests(unittest.TestCase):
         summary = formatear_resumen_torneos(result)
         table = formatear_tablas_torneos(result)
         self.assertIn("ID 123 | LIVE", summary)
-        self.assertIn("Grupo 1 — PROVISIONAL", table)
+        self.assertIn("GRUPO 1 — PROVISIONAL", table)
         self.assertIn("Ana | 2 | 2 | 0 | 4", table)
         self.assertIn("pendientes: 1", table)
         self.assertIn("RESULTADOS FINALIZADOS", table)
