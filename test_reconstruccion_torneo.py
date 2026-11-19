@@ -288,6 +288,44 @@ Mares F
         self.assertEqual(second["puntos_sets_b"], [11, 10, 15, 10, 11])
         self.assertEqual((second["puntos_juego_a"], second["puntos_juego_b"]), (48, 57))
 
+    def test_parses_finished_match_cards_with_T_score_marker(self):
+        group = [
+            {"jugador": "Chlebecek Marek", "rating": "807"},
+            {"jugador": "Sobisek Martin", "rating": "798"},
+            {"jugador": "Zmuda Petr", "rating": "847"},
+            {"jugador": "Bayer Ales", "rating": "787"},
+            {"jugador": "Brozik Karel", "rating": "851"},
+        ]
+        page_text = """Tournament games
+Group
+FINISHED
+03:30
+(807)
+Chlebecek M
+(851)
+Brozik K
+T
+3
+0
+FINISHED
+04:30
+(851)
+Brozik K
+(847)
+Zmuda P
+0
+T
+3
+"""
+        parsed = parsear_detalle_oficial(page_text, group)
+        self.assertEqual(len(parsed["partidos"]), 2)
+        self.assertEqual(parsed["partidos"][0]["marcador_sets"], "3:0")
+        self.assertEqual(parsed["partidos"][0]["marcador_marca"], "T")
+        self.assertEqual(parsed["partidos"][1]["marcador_sets"], "0:3")
+        self.assertEqual(parsed["partidos"][1]["marcador_marca"], "T")
+        self.assertEqual(parsed["partidos"][0]["jugador_a"], "Chlebecek Marek")
+        self.assertEqual(parsed["partidos"][1]["jugador_b"], "Zmuda Petr")
+
     def test_parses_upcoming_roster_without_group_table(self):
         page_text = """Players
 #
