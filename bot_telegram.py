@@ -235,7 +235,7 @@ async def tabla(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await _reply(
             update,
-            "Uso: /tabla NUMERO\\nEjemplo: /tabla 38185\\n"
+            "Uso: /tabla NUMERO\nEjemplo: /tabla 38185\n"
             "Puedes copiar el número desde /vivo o /proximos."
         )
         return
@@ -265,28 +265,28 @@ async def tabla(update: Update, context: ContextTypes.DEFAULT_TYPE):
         analyses = tournament.get("analisis_cronologico") or []
         if analyses:
             for analysis in analyses:
-                lines.append(f"\\n📋 GRUPO {analysis.get('grupo', '?')}")
+                lines.append(f"\n📋 GRUPO {analysis.get('grupo', '?')}")
                 lines.append(_tabla_grupo_texto(analysis))
         else:
             groups = tournament.get("grupos") or []
             if groups:
                 for number, group in enumerate(groups, 1):
-                    lines.append(f"\\n📋 GRUPO {number}")
+                    lines.append(f"\n📋 GRUPO {number}")
                     lines.append("Tabla todavía sin resultados finalizados.")
                     names = [str(player.get("jugador") or "?") for player in group]
                     if names:
                         lines.append("Jugadores: " + ", ".join(names))
             else:
                 lines.append(
-                    "\\nLa ficha oficial todavía no publica grupos ni una tabla de clasificación. "
+                    "\nLa ficha oficial todavía no publica grupos ni una tabla de clasificación. "
                     "En los torneos próximos puede que la clasificación aún no esté disponible."
                 )
 
         lines.append(
-            "\\nNota: la clasificación se reconstruye con partidos finalizados; "
+            "\nNota: la clasificación se reconstruye con partidos finalizados; "
             "los encuentros LIVE o pendientes no suman puntos."
         )
-        await _reply(update, "\\n".join(lines))
+        await _reply(update, "\n".join(lines))
     except Exception as exc:
         logging.exception("Error consultando tabla del torneo %s", tid)
         await _reply(update, f"Error consultando tabla: {type(exc).__name__}: {exc}")
