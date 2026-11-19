@@ -6,6 +6,7 @@ import logging
 import os
 import sys
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
@@ -20,10 +21,23 @@ SCRAPE_INTERVAL = max(60, int(os.getenv("SCRAPE_INTERVAL_SECONDS", "60")))
 _scrape_lock = asyncio.Lock()
 
 
+def _rango_torneo_hoy():
+    """Fechas oficiales de Praga que corresponden al día actual en Colombia."""
+    colombia = ZoneInfo("America/Bogota")
+    praga = ZoneInfo("Europe/Prague")
+    hoy = datetime.now(colombia).date()
+    inicio = datetime.combine(hoy, datetime.min.time(), tzinfo=colombia).astimezone(praga).date()
+    fin = datetime.combine(hoy, datetime.max.time(), tzinfo=colombia).astimezone(praga).date()
+    return inicio.isoformat(), fin.isoformat()
+
+
 def _torneos_por_estado(tournaments, wanted):
+    fecha_desde, fecha_hasta = _rango_torneo_hoy()
     return [
         (str(tid), data) for tid, data in tournaments.items()
         if str(data.get("estado") or "unknown").casefold() in wanted
+        and data.get("fecha_torneo")
+        and fecha_desde <= str(data.get("fecha_torneo")) <= fecha_hasta
     ]
 
 
