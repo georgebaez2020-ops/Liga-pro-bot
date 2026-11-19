@@ -464,7 +464,7 @@ def parsear_detalle_oficial(texto, grupo):
             k = j + 4
             while k < len(lines) and len(marcador_live_tokens) < 8:
                 token = lines[k].strip()
-                if re.fullmatch(r"\d{1,2}", token):
+                if re.fullmatch(r"\d{1,2}", token) or re.fullmatch(r"\d{1,2}\s*[:\-]\s*\d{1,2}", token):
                     marcador_live_tokens.append(token)
                     k += 1
                 elif token.casefold() == "t":
