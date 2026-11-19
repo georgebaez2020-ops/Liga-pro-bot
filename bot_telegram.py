@@ -74,18 +74,22 @@ async def _notificar_cambios_torneos(context, tournaments):
         for tid, data in tournaments.items()
     }
     previous = _json_file(state_path, None)
-    _save_json(state_path, current)
     # Primera ejecución: establece una línea base sin enviar avisos antiguos.
     if previous is None:
+        _save_json(state_path, current)
         logging.info("Línea base de notificaciones de torneos creada.")
         return
+    chats = _json_file(os.getenv("TELEGRAM_CHATS_FILE", "salida/telegram_chats.json"), [])
     changes = [
         (tid, status) for tid, status in current.items()
         if status in {"live", "upcoming"} and previous.get(tid, "absent") != status
     ]
-    if not changes:
+    # Si todavía nadie ha iniciado el bot, conserva el estado anterior para
+    # que los avisos pendientes puedan enviarse después de /start.
+    if changes and not chats:
+        logging.info("Hay cambios de torneos, pero aún no hay chats suscritos.")
         return
-    chats = _json_file(os.getenv("TELEGRAM_CHATS_FILE", "salida/telegram_chats.json"), [])
+    failed = set()
     for tid, status in changes:
         label = "🔴 TORNEO EN VIVO" if status == "live" else "🗓️ NUEVO TORNEO PRÓXIMO"
         date = tournaments[tid].get("fecha_torneo") or "fecha no publicada"
@@ -94,7 +98,16 @@ async def _notificar_cambios_torneos(context, tournaments):
             try:
                 await context.bot.send_message(chat_id=int(chat_id), text=message, disable_web_page_preview=True)
             except Exception:
+                failed.add(tid)
                 logging.exception("No se pudo enviar aviso del torneo %s al chat %s.", tid, chat_id)
+    # No marca como notificado lo que falló: se reintentará en el siguiente ciclo.
+    updated = dict(current)
+    for tid in failed:
+        if tid in previous:
+            updated[tid] = previous[tid]
+        else:
+            updated.pop(tid, None)
+    _save_json(state_path, updated)
 
 
 def _chunks(text, limit=3900):
