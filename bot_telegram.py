@@ -76,13 +76,13 @@ def _formatear_torneos(tournaments, wanted, heading):
         analyses = data.get("analisis_cronologico") or []
         if groups:
             for number, group in enumerate(groups, 1):
-                lines.append(f"\\n👥 JUGADORES — GRUPO {number}")
+                lines.append(f"\n👥 JUGADORES — GRUPO {number}")
                 for player in group:
                     name = str(player.get("jugador") or "Jugador sin nombre").strip()
                     rating = player.get("rating") or "Sin ranking"
                     position = player.get("pos") or "—"
                     lines.append(f"• {name} | Ranking: {rating} | Posición: {position}")
-                lines.append(f"\\n📊 TABLA — GRUPO {number}")
+                lines.append(f"\n📊 TABLA — GRUPO {number}")
                 official = _tabla_oficial_grupo_texto(group)
                 if official:
                     lines.append(official)
@@ -97,11 +97,11 @@ def _formatear_torneos(tournaments, wanted, heading):
                     )
         elif analyses:
             for analysis in analyses:
-                lines.append(f"\\n📊 TABLA — GRUPO {analysis.get('grupo', '?')}")
+                lines.append(f"\n📊 TABLA — GRUPO {analysis.get('grupo', '?')}")
                 lines.append(_tabla_grupo_texto(analysis))
         else:
-            lines.append("\\nLa ficha oficial todavía no publica la lista de jugadores ni la tabla.")
-        lines.append(f"\\nDetalle: /torneo {tid} | Tabla: /tabla {tid}")
+            lines.append("\nLa ficha oficial todavía no publica la lista de jugadores ni la tabla.")
+        lines.append(f"\nDetalle: /torneo {tid} | Tabla: /tabla {tid}")
         lines.append(f"Ficha oficial: https://tt.league-pro.com/en/tournaments/{tid}")
     return "\n".join(lines)
 
