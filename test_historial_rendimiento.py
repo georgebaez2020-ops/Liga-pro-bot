@@ -1,6 +1,7 @@
 import unittest
 
 from historial_rendimiento import acumular_historial_presion, acumular_historial_presion_reconstruido
+from reconstruccion_torneo import reconstruir_secuencia
 
 
 def grupo_vacio():
@@ -25,6 +26,68 @@ def snapshot(at, group, tid="T1"):
 
 
 class HistoricalPressureTests(unittest.TestCase):
+
+    def test_incomplete_snapshots_are_counted_once_and_not_if_later_completed(self):
+        incomplete = {"analisis_cronologico": [{
+            "grupo": 1, "reconstruccion": {"completa": False, "secuencia": []}
+        }]}
+        complete = {"analisis_cronologico": [{
+            "grupo": 1, "reconstruccion": {"completa": True, "secuencia": []}
+        }]}
+        snapshots = [
+            {"tournament_id": "T11", "captured_at": "2026-11-18T08:00:00Z", "payload": incomplete},
+            {"tournament_id": "T11", "captured_at": "2026-11-18T08:05:00Z", "payload": incomplete},
+            {"tournament_id": "T11", "captured_at": "2026-11-18T08:10:00Z", "payload": complete},
+            {"tournament_id": "T12", "captured_at": "2026-11-18T08:00:00Z", "payload": incomplete},
+            {"tournament_id": "T12", "captured_at": "2026-11-18T08:05:00Z", "payload": incomplete},
+        ]
+        result = acumular_historial_presion_reconstruido(snapshots)
+        self.assertEqual(result["resumen"]["grupos_con_reconstruccion_completa"], 1)
+        self.assertEqual(result["resumen"]["grupos_incompletos_omitidos"], 1)
+
+    def test_summary_distinguishes_unique_matches_from_player_match_cases(self):
+        sequence = [{
+            "necesidad_antes": {
+                "A": {"debe_ganar_por_puntos_para_seguir_en_fase": True},
+                "B": {"debe_ganar_por_puntos_para_seguir_en_fase": True},
+            },
+            "cumplio_necesidad": {"A": True, "B": False},
+        }]
+        payload = {"analisis_cronologico": [{
+            "grupo": 1,
+            "reconstruccion": {"completa": True, "secuencia": sequence},
+        }]}
+        result = acumular_historial_presion_reconstruido([{
+            "tournament_id": "T13", "captured_at": "2026-11-18T08:00:00Z",
+            "payload": payload,
+        }])
+        summary = result["resumen"]
+        self.assertEqual(summary["partidos_con_al_menos_un_jugador_obligado"], 1)
+        self.assertEqual(summary["casos_jugador_partido_obligado_a_ganar"], 2)
+        self.assertEqual(summary["partidos_sin_obligacion_estricta"], 0)
+
+    def test_future_results_do_not_change_need_classification_before_a_match(self):
+        players = ["Stefek Martin", "Nohejl Tomas", "Zikmunda Zdenek", "Drabek Zbynek"]
+        matches = [
+            {"hora": "08:00", "jugador_a": "Stefek Martin", "jugador_b": "Nohejl Tomas", "marcador_sets": "2:3"},
+            {"hora": "08:30", "jugador_a": "Zikmunda Zdenek", "jugador_b": "Drabek Zbynek", "marcador_sets": "0:3"},
+            {"hora": "09:00", "jugador_a": "Nohejl Tomas", "jugador_b": "Zikmunda Zdenek", "marcador_sets": "3:1"},
+            {"hora": "09:30", "jugador_a": "Drabek Zbynek", "jugador_b": "Stefek Martin", "marcador_sets": "3:0"},
+            {"hora": "10:00", "jugador_a": "Stefek Martin", "jugador_b": "Zikmunda Zdenek", "marcador_sets": "3:0"},
+            {"hora": "10:30", "jugador_a": "Nohejl Tomas", "jugador_b": "Drabek Zbynek", "marcador_sets": "1:3"},
+        ]
+        original = reconstruir_secuencia(players, matches)
+        altered_matches = [dict(match) for match in matches]
+        altered_matches[4]["marcador_sets"] = "0:3"
+        altered_matches[5]["marcador_sets"] = "3:1"
+        altered = reconstruir_secuencia(players, altered_matches)
+
+        original_need = original["secuencia"][3]["necesidad_antes"]["Stefek Martin"]
+        altered_need = altered["secuencia"][3]["necesidad_antes"]["Stefek Martin"]
+        self.assertTrue(original_need["debe_ganar_por_puntos_para_seguir_en_fase"])
+        self.assertEqual(original_need, altered_need)
+        self.assertFalse(original["secuencia"][3]["cumplio_necesidad"]["Stefek Martin"])
+
 
     def test_uses_complete_reconstruction_for_must_win_history(self):
         sequence = [{
