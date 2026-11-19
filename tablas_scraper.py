@@ -393,10 +393,22 @@ async def main():
                 dato = await extraer(page, torneo)
                 fecha_oficial = dato.get("fecha_torneo")
                 fecha_desde, fecha_hasta = rango_fechas_praga(dia)
-                if not fecha_oficial or not (fecha_desde <= fecha_oficial <= fecha_hasta):
+                fechas_partidos_col = {
+                    str(p.get("fecha_colombia"))
+                    for p in dato.get("partidos", [])
+                    if p.get("fecha_colombia")
+                }
+                # Si la ficha publica horas, decide por el día real del partido
+                # en Colombia, no por la fecha civil de Praga.
+                corresponde_hoy = (
+                    dia in fechas_partidos_col if fechas_partidos_col
+                    else bool(fecha_oficial and fecha_desde <= fecha_oficial <= fecha_hasta)
+                )
+                if not corresponde_hoy:
                     print(
-                        f"Torneo {tid} descartado: fecha oficial {fecha_oficial or 'no publicada'} "
-                        f"fuera del rango solicitado {fecha_desde} a {fecha_hasta} (Praga)."
+                        f"Torneo {tid} descartado: fecha oficial {fecha_oficial or 'no publicada'}; "
+                        f"fechas de partidos en Colombia {sorted(fechas_partidos_col)}; "
+                        f"día solicitado {dia}."
                     )
                     continue
                 resultado["torneos"][tid] = dato
