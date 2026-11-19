@@ -1,5 +1,6 @@
 import asyncio
 import csv
+import gc
 import json
 import os
 import re
@@ -10,7 +11,6 @@ from zoneinfo import ZoneInfo
 from playwright.async_api import async_playwright
 
 from db import HistoryDB
-from inteligencia_torneo import integrar_inteligencia_en_resultado
 from reconstruccion_torneo import (
     _nombre_ficha_coincide, consolidar_partidos_torneo, parsear_detalle_oficial,
     parsear_marcador_sets_live, reconstruir_secuencia,
@@ -483,10 +483,9 @@ async def main():
                 resultado["resumen"][torneo["estado"]] += 1
 
         await browser.close()
-
-    # Analiza antes de escribir archivos o snapshots para que todos conserven el análisis.
-    integrar_inteligencia_en_resultado(resultado)
-    print("Resumen de inteligencia:", json.dumps(resultado["resumen_inteligencia"], ensure_ascii=False))
+        del page
+        del browser
+        gc.collect()
 
     os.makedirs(SALIDA, exist_ok=True)
     with open(f"{SALIDA}/tablas.json", "w", encoding="utf-8") as f:
@@ -497,30 +496,7 @@ async def main():
     guardado = history_db.save_scrape(resultado)
     print("Memoria histórica actualizada:", json.dumps(guardado, ensure_ascii=False))
 
-    # Ciclo de retroalimentación: liquidar pronósticos solo con marcadores
-    # completos observados después de la fecha en que fueron registrados.
-    from retroalimentacion import PredictionFeedback
-    feedback = PredictionFeedback(history_db)
-    liquidacion = feedback.settle_from_snapshots(history_db.listar_snapshots())
-    metricas = feedback.metrics()
-    print("Retroalimentación:", json.dumps(liquidacion, ensure_ascii=False))
-    print("Evaluación acumulada:", json.dumps(metricas, ensure_ascii=False))
-    with open(f"{SALIDA}/evaluacion_modelo.json", "w", encoding="utf-8") as f:
-        json.dump({"liquidacion": liquidacion, "metricas": metricas},
-                  f, ensure_ascii=False, indent=2)
-
-    # Perfiles descriptivos se recalculan desde cero con el histórico completo.
-    # No se usan como variables predictivas hasta superar pruebas walk-forward.
-    from radar_necesidad import acumular_radar_necesidad
-    from historial_rendimiento import acumular_historial_presion
-    snapshots = history_db.listar_snapshots()
-    for filename, report in (
-        ("radar_necesidad.json", acumular_radar_necesidad(snapshots)),
-        ("rendimiento_competitivo.json", acumular_historial_presion(snapshots)),
-    ):
-        with open(f"{SALIDA}/{filename}", "w", encoding="utf-8") as f:
-            json.dump(report, f, ensure_ascii=False, indent=2)
-
+    # En esta fase solo se conserva el historial scrapeado; el análisis avanzado queda aplazado.
     with open(f"{SALIDA}/tablas.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow([
