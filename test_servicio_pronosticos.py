@@ -64,7 +64,7 @@ class PredictionServiceTests(unittest.TestCase):
         self.assertIn("ID 123 | LIVE", summary)
         self.assertIn("Grupo 1 — PROVISIONAL", table)
         self.assertIn("Ana | 2 | 2 | 0 | 4", table)
-        self.assertIn("Pendientes: 1", table)\n        self.assertIn("RESULTADOS FINALIZADOS", table)\n        self.assertIn("Ana 3:1 Beto", table)\n        self.assertIn("PARTIDOS EN JUEGO", table)\n        self.assertIn("Ciro vs Dora", table)\n        self.assertNotIn("UPCOMING", table)
+        self.assertIn("pendientes: 1", table)\n        self.assertIn("RESULTADOS FINALIZADOS", table)\n        self.assertIn("Ana 3:1 Beto", table)\n        self.assertIn("PARTIDOS EN JUEGO", table)\n        self.assertIn("Ciro vs Dora", table)\n        self.assertNotIn("UPCOMING", table)
 
     def test_upcoming_tournament_without_published_groups_is_explicit(self):
         result = {"torneos": {"456": {"estado": "upcoming", "grupos": []}}}
