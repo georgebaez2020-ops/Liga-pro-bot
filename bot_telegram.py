@@ -174,9 +174,14 @@ def _detalle_torneo(tid, tournament):
     if live:
         lines.append("\n🔴 PARTIDOS EN VIVO")
         for match in live:
+            parcial = match.get("marcador_live_texto")
+            detalle_parcial = (
+                f" | marcador LIVE publicado: {parcial}"
+                if parcial else " | la ficha no publicó cifras de marcador en esta extracción"
+            )
             lines.append(
                 f"• {match.get('jugador_a', '?')} vs {match.get('jugador_b', '?')} "
-                f"| Grupo {match.get('grupo') or '—'} | marcador parcial no disponible en la extracción"
+                f"| Grupo {match.get('grupo') or '—'}{detalle_parcial}"
             )
     if upcoming:
         lines.append("\n⏳ PRÓXIMOS PARTIDOS")
