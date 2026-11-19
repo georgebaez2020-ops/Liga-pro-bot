@@ -162,6 +162,33 @@ async def _actualizar_vistas_torneos(app):
             logging.info("Se cierra vista dinámica de %s: %s", chat_id, exc)
             views.pop(chat_id, None)
 
+async def _actualizar_vistas_detalle(app):
+    """Actualiza el detalle y la tabla del torneo en el mismo mensaje."""
+    views = app.bot_data.get("vistas_detalle", {})
+    if not views:
+        return
+    try:
+        _, _, tournaments = cargar_estado()
+    except Exception:
+        logging.exception("No se pudo cargar la memoria para actualizar detalles.")
+        return
+    for chat_id, view in list(views.items()):
+        tid = view["tid"]
+        tournament = tournaments.get(tid)
+        if not tournament:
+            continue
+        text = _texto_telegram(_detalle_torneo(tid, tournament))
+        if text == view.get("last_text"):
+            continue
+        try:
+            await app.bot.edit_message_text(
+                chat_id=chat_id, message_id=view["message_id"], text=text
+            )
+            view["last_text"] = text
+        except Exception as exc:
+            logging.info("Se cierra detalle dinámico del torneo %s: %s", tid, exc)
+            views.pop(chat_id, None)
+
 
 async def _enviar_vista_torneos(update, context, wanted, heading):
     _, _, tournaments = cargar_estado()
@@ -384,7 +411,14 @@ async def torneo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not tournament:
             await _reply(update, f"No encuentro el torneo #{tid} en la última extracción. Revisa /vivo o /proximos y vuelve a intentarlo.")
             return
-        await _reply(update, _detalle_torneo(tid, tournament))
+        text = _texto_telegram(_detalle_torneo(tid, tournament))
+        message = await update.effective_message.reply_text(text)
+        views = context.application.bot_data.setdefault("vistas_detalle", {})
+        views[update.effective_chat.id] = {
+            "tid": tid,
+            "message_id": message.message_id,
+            "last_text": text,
+        }
     except Exception as exc:
         logging.exception("Error consultando detalle del torneo %s", tid)
         await _reply(update, f"Error consultando torneo: {type(exc).__name__}: {exc}")
@@ -658,6 +692,7 @@ async def scrape_job(context: ContextTypes.DEFAULT_TYPE):
             else:
                 logging.info("Scraper actualizado correctamente:\n%s", tail)
                 await _actualizar_vistas_torneos(context.application)
+                await _actualizar_vistas_detalle(context.application)
                 try:
                     from servicio_pronosticos import analizar_calendario
                     result = analizar_calendario()
