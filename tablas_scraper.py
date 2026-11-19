@@ -69,10 +69,13 @@ JS_ENLACES_PARTIDOS = r"""
 def _marcador_en_ficha_partido(texto, jugador_a, jugador_b):
     """Lee el marcador de sets entre los dos jugadores, sin confundir puntos del set."""
     lineas = [line.strip() for line in str(texto or "").splitlines() if line.strip()]
-    pos_a = [i for i, line in enumerate(lineas)
-             if _nombre_ficha_coincide(line, str(jugador_a or ""))]
-    pos_b = [i for i, line in enumerate(lineas)
-             if _nombre_ficha_coincide(line, str(jugador_b or ""))]
+    def es_jugador(linea, nombre):
+        # Las fichas oficiales pueden anteponer o añadir el rating (#847 / (847)).
+        nombre_limpio = re.sub(r"#\\s*\\d+\\b|\\(\\s*\\d+\\s*\\)", " ", linea)
+        return _nombre_ficha_coincide(nombre_limpio, str(nombre or ""))
+
+    pos_a = [i for i, line in enumerate(lineas) if es_jugador(line, jugador_a)]
+    pos_b = [i for i, line in enumerate(lineas) if es_jugador(line, jugador_b)]
     if len(pos_a) != 1 or len(pos_b) != 1 or pos_a[0] == pos_b[0]:
         return None
     a, b = pos_a[0], pos_b[0]
