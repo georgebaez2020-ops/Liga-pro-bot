@@ -457,9 +457,14 @@ async def main():
                 }
                 # Si la ficha publica horas, decide por el día real del partido
                 # en Colombia, no por la fecha civil de Praga.
+                # Un torneo pertenece al día consultado si coincide su fecha
+                # oficial de Praga dentro del rango que cubre el día colombiano,
+                # O si alguno de sus partidos cae en el día colombiano solicitado.
+                # No descartamos el torneo solo porque la conversión horaria mueva
+                # un partido a la víspera en Colombia.
                 corresponde_hoy = (
-                    dia in fechas_partidos_col if fechas_partidos_col
-                    else bool(fecha_oficial and fecha_desde <= fecha_oficial <= fecha_hasta)
+                    dia in fechas_partidos_col
+                    or bool(fecha_oficial and fecha_desde <= fecha_oficial <= fecha_hasta)
                 )
                 if not corresponde_hoy:
                     print(
