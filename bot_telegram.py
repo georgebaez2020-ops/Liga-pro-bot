@@ -20,6 +20,83 @@ SCRAPE_INTERVAL = max(300, int(os.getenv("SCRAPE_INTERVAL_SECONDS", "900")))
 _scrape_lock = asyncio.Lock()
 
 
+def _json_file(path, default):
+    import json
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            return json.load(handle)
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return default
+
+
+def _save_json(path, data):
+    import json
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    temporary = path + ".tmp"
+    with open(temporary, "w", encoding="utf-8") as handle:
+        json.dump(data, handle, ensure_ascii=False, indent=2)
+    os.replace(temporary, path)
+
+
+def _registrar_chat(chat_id):
+    path = os.getenv("TELEGRAM_CHATS_FILE", "salida/telegram_chats.json")
+    chats = _json_file(path, [])
+    chat_id = str(chat_id)
+    if chat_id not in chats:
+        chats.append(chat_id)
+        _save_json(path, chats)
+
+
+def _torneos_por_estado(tournaments, wanted):
+    return [
+        (str(tid), data) for tid, data in tournaments.items()
+        if str(data.get("estado") or "unknown").casefold() in wanted
+    ]
+
+
+def _formatear_torneos(tournaments, wanted, heading):
+    rows = _torneos_por_estado(tournaments, wanted)
+    if not rows:
+        return heading + "\nNo hay torneos en esta categoría en la última actualización."
+    lines = [heading, f"Total: {len(rows)}"]
+    for tid, data in sorted(rows, key=lambda item: (str(item[1].get("fecha_torneo") or ""), item[0])):
+        status = str(data.get("estado") or "unknown").upper()
+        date = data.get("fecha_torneo") or "fecha no publicada"
+        lines.append(f"\n🏓 Torneo #{tid} — {status}\nFecha: {date}\nhttps://tt.league-pro.com/en/tournaments/{tid}")
+    return "\n".join(lines)
+
+
+async def _notificar_cambios_torneos(context, tournaments):
+    """Notifica torneos nuevos LIVE/UPCOMING y transiciones UPCOMING -> LIVE."""
+    state_path = os.getenv("TELEGRAM_TOURNAMENT_STATE_FILE", "salida/telegram_tournaments_state.json")
+    current = {
+        str(tid): str(data.get("estado") or "unknown").casefold()
+        for tid, data in tournaments.items()
+    }
+    previous = _json_file(state_path, None)
+    _save_json(state_path, current)
+    # Primera ejecución: establece una línea base sin enviar avisos antiguos.
+    if previous is None:
+        logging.info("Línea base de notificaciones de torneos creada.")
+        return
+    changes = [
+        (tid, status) for tid, status in current.items()
+        if status in {"live", "upcoming"} and previous.get(tid, "absent") != status
+    ]
+    if not changes:
+        return
+    chats = _json_file(os.getenv("TELEGRAM_CHATS_FILE", "salida/telegram_chats.json"), [])
+    for tid, status in changes:
+        label = "🔴 TORNEO EN VIVO" if status == "live" else "🗓️ NUEVO TORNEO PRÓXIMO"
+        date = tournaments[tid].get("fecha_torneo") or "fecha no publicada"
+        message = f"{label}\nTorneo #{tid}\nFecha: {date}\nhttps://tt.league-pro.com/en/tournaments/{tid}"
+        for chat_id in chats:
+            try:
+                await context.bot.send_message(chat_id=int(chat_id), text=message, disable_web_page_preview=True)
+            except Exception:
+                logging.exception("No se pudo enviar aviso del torneo %s al chat %s.", tid, chat_id)
+
+
 def _chunks(text, limit=3900):
     text = str(text)
     return [text[i:i + limit] for i in range(0, len(text), limit)] or ["Sin datos disponibles."]
@@ -31,11 +108,15 @@ async def _reply(update, text):
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    _registrar_chat(update.effective_chat.id)
     await _reply(update,
         "🏓 Liga Pro Bot conectado.\n\n"
         "Comandos:\n"
         "/estado — estado de la memoria y torneos\n"
         "/calendario — partidos programados y en vivo\n"
+        "/torneos — torneos en vivo y próximos\n"
+        "/vivo — torneos que están en juego\n"
+        "/proximos — torneos próximos\n"
         "/pronosticos — análisis conservador de próximos partidos\n"
         "/jugador NOMBRE — histórico de un jugador\n"
         "/necesidad NOMBRE — respuesta histórica cuando debía ganar\n"
@@ -84,6 +165,33 @@ async def calendario(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as exc:
         logging.exception("Error en /calendario")
         await _reply(update, f"Error consultando calendario: {type(exc).__name__}: {exc}")
+
+
+async def torneos(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        _, _, tournaments = cargar_estado()
+        await _reply(update, _formatear_torneos(tournaments, {"live", "upcoming"}, "🏓 TORNEOS LIVE Y PRÓXIMOS"))
+    except Exception as exc:
+        logging.exception("Error en /torneos")
+        await _reply(update, f"Error consultando torneos: {type(exc).__name__}: {exc}")
+
+
+async def vivo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        _, _, tournaments = cargar_estado()
+        await _reply(update, _formatear_torneos(tournaments, {"live"}, "🔴 TORNEOS EN VIVO"))
+    except Exception as exc:
+        logging.exception("Error en /vivo")
+        await _reply(update, f"Error consultando torneos en vivo: {type(exc).__name__}: {exc}")
+
+
+async def proximos(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        _, _, tournaments = cargar_estado()
+        await _reply(update, _formatear_torneos(tournaments, {"upcoming"}, "🗓️ PRÓXIMOS TORNEOS"))
+    except Exception as exc:
+        logging.exception("Error en /proximos")
+        await _reply(update, f"Error consultando próximos torneos: {type(exc).__name__}: {exc}")
 
 
 async def pronosticos(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -269,6 +377,8 @@ async def scrape_job(context: ContextTypes.DEFAULT_TYPE):
                                  result["partidos_programados_analizados"],
                                  result["pronosticos_registrados"],
                                  result["liquidacion"]["liquidados"])
+                    _, _, tournaments = cargar_estado()
+                    await _notificar_cambios_torneos(context, tournaments)
                 except Exception:
                     logging.exception("Falló el ciclo predictivo posterior al scraper.")
         except asyncio.TimeoutError:
@@ -290,6 +400,9 @@ def main():
     app.add_handler(CommandHandler("test", test))
     app.add_handler(CommandHandler("estado", estado))
     app.add_handler(CommandHandler("calendario", calendario))
+    app.add_handler(CommandHandler("torneos", torneos))
+    app.add_handler(CommandHandler("vivo", vivo))
+    app.add_handler(CommandHandler("proximos", proximos))
     app.add_handler(CommandHandler("pronosticos", pronosticos))
     app.add_handler(CommandHandler("jugador", jugador))
     app.add_handler(CommandHandler("necesidad", necesidad))
