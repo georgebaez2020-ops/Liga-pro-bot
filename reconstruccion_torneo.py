@@ -22,7 +22,7 @@ def parsear_marcador_sets_live(texto):
     import re
     encontrados = {
         (int(a), int(b))
-        for a, b in re.findall(r"(?m)^\\s*([0-3])\\s*:\\s*([0-3])\\s*$", str(texto or ""))
+        for a, b in re.findall(r"(?m)^\s*([0-3])\s*:\s*([0-3])\s*$", str(texto or ""))
     }
     if len(encontrados) != 1:
         return None
