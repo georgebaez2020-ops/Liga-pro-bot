@@ -4,11 +4,11 @@ on:
   push:
     branches:
       - integration/telegram-prediction-engine
-      - feature/marcador-parcial-live
   pull_request:
     branches:
       - feature/status-upcoming-live-finished
       - integration/telegram-prediction-engine
+      - feature/consulta-en-vivo-torneos-tablas
 
 permissions:
   contents: read
