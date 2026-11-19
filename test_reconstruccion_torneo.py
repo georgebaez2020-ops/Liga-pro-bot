@@ -418,5 +418,43 @@ Player D
         self.assertIsNone(result["partidos_programados"][0]["grupo"])
 
 
+
+
+    def test_live_match_sheet_resolves_abbreviated_player_names(self):
+        from tablas_scraper import _marcador_en_ficha_partido
+        page_text = """Match
+Franek T
+1:2
+Skakal M
+"""
+        self.assertEqual(
+            _marcador_en_ficha_partido(page_text, "Franek Tomas", "Skakal Martin"),
+            "1:2",
+        )
+
+    def test_live_match_sheet_reverses_score_when_player_order_is_reversed(self):
+        from tablas_scraper import _marcador_en_ficha_partido
+        page_text = """Match
+Skakal M
+2:1
+Franek T
+"""
+        self.assertEqual(
+            _marcador_en_ficha_partido(page_text, "Franek Tomas", "Skakal Martin"),
+            "1:2",
+        )
+
+    def test_live_match_sheet_rejects_ambiguous_abbreviated_names(self):
+        from tablas_scraper import _marcador_en_ficha_partido
+        page_text = """Match
+Hrabec J
+1:2
+Hrabec Jan
+"""
+        self.assertIsNone(
+            _marcador_en_ficha_partido(page_text, "Hrabec Jan", "Hrabec Jiri")
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
