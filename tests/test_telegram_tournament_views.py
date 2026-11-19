@@ -85,6 +85,47 @@ class TournamentViewsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(app.bot.edits[0]["message_id"], 456)
         self.assertIn("Jugador A", app.bot.edits[0]["text"])
 
+    async def test_detail_view_edits_same_message_when_tournament_changes(self):
+        app = FakeApp()
+        app.bot_data["vistas_detalle"] = {
+            (123, "38228"): {
+                "chat_id": 123, "tid": "38228", "message_id": 789,
+                "last_text": "old detail",
+            }
+        }
+        tournament = {"estado": "live", "partidos": [], "grupos": []}
+        with patch.object(bot_telegram, "cargar_estado",
+                          return_value=(None, [], {"38228": tournament})), \
+             patch.object(bot_telegram, "_detalle_torneo",
+                          return_value="new detail"):
+            await bot_telegram._actualizar_vistas_detalle(app)
+        self.assertEqual(len(app.bot.edits), 1)
+        self.assertEqual(app.bot.edits[0]["message_id"], 789)
+        self.assertEqual(app.bot.edits[0]["text"], "new detail")
+        self.assertEqual(app.bot_data["vistas_detalle"][(123, "38228")]["last_text"],
+                         "new detail")
+
+    async def test_detail_view_is_not_discarded_on_transient_telegram_error(self):
+        class TemporaryFailureBot:
+            async def edit_message_text(self, **kwargs):
+                raise RuntimeError("temporary network timeout")
+
+        app = FakeApp()
+        app.bot = TemporaryFailureBot()
+        key = (123, "38228")
+        app.bot_data["vistas_detalle"] = {
+            key: {"chat_id": 123, "tid": "38228", "message_id": 789,
+                  "last_text": "old detail"}
+        }
+        with patch.object(bot_telegram, "cargar_estado",
+                          return_value=(None, [], {"38228": {"estado": "live"}})), \
+             patch.object(bot_telegram, "_detalle_torneo",
+                          return_value="new detail"):
+            await bot_telegram._actualizar_vistas_detalle(app)
+        self.assertIn(key, app.bot_data["vistas_detalle"])
+        self.assertEqual(app.bot_data["vistas_detalle"][key]["last_text"],
+                         "old detail")
+
 
 if __name__ == "__main__":
     unittest.main()
