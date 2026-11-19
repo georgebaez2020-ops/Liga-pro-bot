@@ -24,9 +24,9 @@ MAX_TORNEOS = int(os.getenv("MAX_TORNEOS", "100"))
 MAX_PAGINAS = int(os.getenv("MAX_PAGINAS", "10"))
 ESTADOS = ("live", "upcoming", "finished")
 ETIQUETAS_ESTADO = {
-    "live": ("live", "in progress"),
-    "upcoming": ("upcoming",),
-    "finished": ("finished",),
+    "live": ("live", "in progress", "en vivo", "en directo"),
+    "upcoming": ("upcoming", "próximamente", "proximamente", "planificado", "planificada"),
+    "finished": ("finished", "finalizado", "finalizada"),
 }
 
 # En la ficha de cada torneo: una fila por jugador.
@@ -153,7 +153,7 @@ def normalizar_estado(texto, clase=""):
         return "live"
     coincidencias = {
         estado for estado, etiquetas in ETIQUETAS_ESTADO.items()
-        if any(re.search(rf"\b{re.escape(etiqueta)}\b", texto) for etiqueta in etiquetas)
+        if any(etiqueta in texto for etiqueta in etiquetas)
     }
     return coincidencias.pop() if len(coincidencias) == 1 else "unknown"
 
