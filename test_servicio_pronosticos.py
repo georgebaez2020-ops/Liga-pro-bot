@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from servicio_pronosticos import listar_calendario
+from servicio_pronosticos import listar_calendario, buscar_jugador
 from reconstruccion_torneo import parsear_detalle_oficial
 
 
@@ -44,6 +44,22 @@ class PredictionServiceTests(unittest.TestCase):
         parsed = parsear_detalle_oficial("Players\nTournament games\nPlanned\n08:00", [])
         self.assertIsNone(parsed["fecha_torneo"])
         self.assertTrue(any("fecha oficial" in x.get("motivo", "") for x in parsed["advertencias"]))
+
+
+    def test_player_search_accepts_name_and_surname_in_either_order(self):
+        profiles = [{"jugador": "Biolek Martin", "global": {"partidos": 6}}]
+        with patch("servicio_pronosticos.informes", return_value={
+            "jugadores": {"jugadores": profiles}
+        }):
+            self.assertEqual(buscar_jugador("Martin Biolek"), profiles)
+            self.assertEqual(buscar_jugador("Biolek Martin"), profiles)
+
+    def test_player_search_is_accent_insensitive(self):
+        profiles = [{"jugador": "Martin Bíolek", "global": {"partidos": 6}}]
+        with patch("servicio_pronosticos.informes", return_value={
+            "jugadores": {"jugadores": profiles}
+        }):
+            self.assertEqual(buscar_jugador("Biolek Martin"), profiles)
 
 
 if __name__ == "__main__":
