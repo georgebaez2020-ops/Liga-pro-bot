@@ -71,7 +71,7 @@ def _marcador_en_ficha_partido(texto, jugador_a, jugador_b):
     lineas = [line.strip() for line in str(texto or "").splitlines() if line.strip()]
     def es_jugador(linea, nombre):
         # Las fichas oficiales pueden anteponer o añadir el rating (#847 / (847)).
-        nombre_limpio = re.sub(r"#\\s*\\d+\\b|\\(\\s*\\d+\\s*\\)", " ", linea)
+        nombre_limpio = re.sub(r"#\s*\d+\b|\(\s*\d+\s*\)", " ", linea)
         return _nombre_ficha_coincide(nombre_limpio, str(nombre or ""))
 
     pos_a = [i for i, line in enumerate(lineas) if es_jugador(line, jugador_a)]
