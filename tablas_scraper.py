@@ -42,15 +42,25 @@ JS_FILAS = r"""
 # En el listado, conserva el texto de la fila contenedora para leer el estado
 # que muestra la propia web. No se asignan códigos numéricos supuestos.
 JS_TORNEOS = r"""
-() => Array.from(document.querySelectorAll('a[href*="/en/tournaments/"]')).map(a => {
-  const card = a.closest(".c-tournament-item") || a.closest(".c-live-matches-item") || a;
-  return {
-    href: a.href,
-    text: (card.innerText || card.textContent || "").trim(),
-    className: typeof card.className === "string" ? card.className : "",
-    linkClass: typeof a.className === "string" ? a.className : ""
-  };
-})
+() => Array.from(document.querySelectorAll('a[href*="/en/tournaments/"]'))
+  // Solo enlaces a la ficha del torneo. Los enlaces de partidos tienen
+  // segmentos adicionales (/ID_PARTIDO) y no deben convertirse en torneos.
+  .filter(a => /^\/en\/tournaments\/\d+\/?$/.test(new URL(a.href).pathname))
+  .map(a => {
+    // La página publica los torneos en filas con columnas Date, Tournament,
+    // Players, Status y Winner. Leer la fila completa permite obtener el
+    // estado oficial; usar solo el <a> deja el estado como unknown.
+    const card = a.closest("tr")
+      || a.closest(".c-tournament-item")
+      || a.closest(".c-live-matches-item")
+      || a.parentElement;
+    return {
+      href: a.href,
+      text: (card?.innerText || card?.textContent || "").trim(),
+      className: typeof card?.className === "string" ? card.className : "",
+      linkClass: typeof a.className === "string" ? a.className : ""
+    };
+  })
 """
 
 JS_ENLACES_PARTIDOS = r"""
