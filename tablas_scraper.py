@@ -72,7 +72,7 @@ def _marcador_en_ficha_partido(texto, jugador_a, jugador_b):
     b = lower.find(str(jugador_b or "").casefold())
     if a < 0 or b < 0 or a == b:
         return None
-    for match in re.finditer(r"(?m)^\\s*([0-3])\\s*:\\s*([0-3])\\s*$", contenido):
+    for match in re.finditer(r"(?m)^\s*([0-3])\s*:\s*([0-3])\s*$", contenido):
         if min(a, b) < match.start() < max(a, b):
             score = parsear_marcador_sets_live(match.group(0))
             if score:
