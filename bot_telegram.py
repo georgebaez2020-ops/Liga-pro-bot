@@ -20,33 +20,6 @@ SCRAPE_INTERVAL = max(300, int(os.getenv("SCRAPE_INTERVAL_SECONDS", "900")))
 _scrape_lock = asyncio.Lock()
 
 
-def _json_file(path, default):
-    import json
-    try:
-        with open(path, "r", encoding="utf-8") as handle:
-            return json.load(handle)
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
-        return default
-
-
-def _save_json(path, data):
-    import json
-    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    temporary = path + ".tmp"
-    with open(temporary, "w", encoding="utf-8") as handle:
-        json.dump(data, handle, ensure_ascii=False, indent=2)
-    os.replace(temporary, path)
-
-
-def _registrar_chat(chat_id):
-    path = os.getenv("TELEGRAM_CHATS_FILE", "salida/telegram_chats.json")
-    chats = _json_file(path, [])
-    chat_id = str(chat_id)
-    if chat_id not in chats:
-        chats.append(chat_id)
-        _save_json(path, chats)
-
-
 def _torneos_por_estado(tournaments, wanted):
     return [
         (str(tid), data) for tid, data in tournaments.items()
@@ -66,48 +39,6 @@ def _formatear_torneos(tournaments, wanted, heading):
     return "\n".join(lines)
 
 
-async def _notificar_cambios_torneos(context, tournaments):
-    """Notifica torneos nuevos LIVE/UPCOMING y transiciones UPCOMING -> LIVE."""
-    state_path = os.getenv("TELEGRAM_TOURNAMENT_STATE_FILE", "salida/telegram_tournaments_state.json")
-    current = {
-        str(tid): str(data.get("estado") or "unknown").casefold()
-        for tid, data in tournaments.items()
-    }
-    previous = _json_file(state_path, None)
-    # Primera ejecución: establece una línea base sin enviar avisos antiguos.
-    if previous is None:
-        _save_json(state_path, current)
-        logging.info("Línea base de notificaciones de torneos creada.")
-        return
-    chats = _json_file(os.getenv("TELEGRAM_CHATS_FILE", "salida/telegram_chats.json"), [])
-    changes = [
-        (tid, status) for tid, status in current.items()
-        if status in {"live", "upcoming"} and previous.get(tid, "absent") != status
-    ]
-    # Si todavía nadie ha iniciado el bot, conserva el estado anterior para
-    # que los avisos pendientes puedan enviarse después de /start.
-    if changes and not chats:
-        logging.info("Hay cambios de torneos, pero aún no hay chats suscritos.")
-        return
-    failed = set()
-    for tid, status in changes:
-        label = "🔴 TORNEO EN VIVO" if status == "live" else "🗓️ NUEVO TORNEO PRÓXIMO"
-        date = tournaments[tid].get("fecha_torneo") or "fecha no publicada"
-        message = f"{label}\nTorneo #{tid}\nFecha: {date}\nhttps://tt.league-pro.com/en/tournaments/{tid}"
-        for chat_id in chats:
-            try:
-                await context.bot.send_message(chat_id=int(chat_id), text=message, disable_web_page_preview=True)
-            except Exception:
-                failed.add(tid)
-                logging.exception("No se pudo enviar aviso del torneo %s al chat %s.", tid, chat_id)
-    # No marca como notificado lo que falló: se reintentará en el siguiente ciclo.
-    updated = dict(current)
-    for tid in failed:
-        if tid in previous:
-            updated[tid] = previous[tid]
-        else:
-            updated.pop(tid, None)
-    _save_json(state_path, updated)
 
 
 def _chunks(text, limit=3900):
@@ -121,7 +52,6 @@ async def _reply(update, text):
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    _registrar_chat(update.effective_chat.id)
     await _reply(update,
         "🏓 Liga Pro Bot conectado.\n\n"
         "Comandos:\n"
@@ -390,8 +320,6 @@ async def scrape_job(context: ContextTypes.DEFAULT_TYPE):
                                  result["partidos_programados_analizados"],
                                  result["pronosticos_registrados"],
                                  result["liquidacion"]["liquidados"])
-                    _, _, tournaments = cargar_estado()
-                    await _notificar_cambios_torneos(context, tournaments)
                 except Exception:
                     logging.exception("Falló el ciclo predictivo posterior al scraper.")
         except asyncio.TimeoutError:
