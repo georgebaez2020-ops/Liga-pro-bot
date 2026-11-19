@@ -22,7 +22,7 @@ jobs:
       - name: Install project dependencies
         run: pip install -r requirements.txt
       - name: Compile Telegram integration
-        run: python -m py_compile bot_telegram.py servicio_pronosticos.py tablas_scraper.py reconstruccion_torneo.py
+        run: python -m py_compile bot_telegram.py servicio_pronosticos.py tablas_scraper.py reconstruccion_torneo.py test_live_scraper.py
       - name: Test prediction service and feedback
         run: |
           python -m unittest -v \
@@ -31,4 +31,5 @@ jobs:
             tests/test_retroalimentacion.py \
             test_db.py \
             test_backfill_historico.py \
-            test_reconstruccion_torneo.py
+            test_reconstruccion_torneo.py \
+            test_live_scraper.py
