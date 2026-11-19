@@ -27,6 +27,36 @@ def snapshot(at, group, tid="T1"):
 
 class HistoricalPressureTests(unittest.TestCase):
 
+
+    def test_recalculates_old_saved_reconstruction_from_raw_group_cards(self):
+        names = ["Stefek Martin", "Nohejl Tomas", "Zikmunda Zdenek", "Drabek Zbynek"]
+        matches = [
+            {"orden": 1, "hora": "08:00", "estado": "finished", "fase": "group", "jugador_a": names[0], "jugador_b": names[1], "marcador_sets": "2:3"},
+            {"orden": 2, "hora": "08:30", "estado": "finished", "fase": "group", "jugador_a": names[2], "jugador_b": names[3], "marcador_sets": "0:3"},
+            {"orden": 3, "hora": "09:00", "estado": "finished", "fase": "group", "jugador_a": names[1], "jugador_b": names[2], "marcador_sets": "3:1"},
+            {"orden": 4, "hora": "09:30", "estado": "finished", "fase": "group", "jugador_a": names[3], "jugador_b": names[0], "marcador_sets": "3:0"},
+            {"orden": 5, "hora": "10:00", "estado": "finished", "fase": "group", "jugador_a": names[0], "jugador_b": names[2], "marcador_sets": "3:0"},
+            {"orden": 6, "hora": "10:30", "estado": "finished", "fase": "group", "jugador_a": names[1], "jugador_b": names[3], "marcador_sets": "1:3"},
+        ]
+        payload = {
+            "grupos": [[{"jugador": name} for name in names]],
+            "analisis_cronologico": [{
+                "grupo": 1,
+                "partidos_ficha": matches,
+                "reconstruccion": {"completa": True, "secuencia": []},
+            }],
+        }
+        result = acumular_historial_presion_reconstruido([{
+            "tournament_id": "T16", "captured_at": "2026-11-18T08:00:00Z",
+            "payload": payload,
+        }])
+        summary = result["resumen"]
+        self.assertEqual(summary["grupos_recalculados_desde_partidos"], 1)
+        self.assertEqual(summary["casos_jugador_partido_obligado_a_ganar"], 1)
+        player = next(row for row in result["jugadores"] if row["jugador"] == "Stefek Martin")
+        self.assertEqual(player["derrotas"], 1)
+        self.assertEqual(player["tasa_victoria"], 0.0)
+
     def test_incomplete_snapshots_are_counted_once_and_not_if_later_completed(self):
         incomplete = {"analisis_cronologico": [{
             "grupo": 1, "reconstruccion": {"completa": False, "secuencia": []}
