@@ -177,18 +177,20 @@ def acumular_historial_presion_reconstruido(snapshots):
         snapshots,
         key=lambda item: (str(item.get("captured_at") or ""), str(item.get("tournament_id") or "")),
     )
-    # Una ficha puede aparecer en varios snapshots; usar una sola reconstrucción
-    # completa por torneo/grupo evita contar el mismo partido varias veces.
+    # Una ficha puede aparecer en varios snapshots; usar la última reconstrucción
+    # completa por torneo/grupo evita duplicar los partidos.
     selected = {}
+    incomplete_keys = set()
     summary = {
         "snapshots_procesados": len(ordered),
         "grupos_con_reconstruccion_completa": 0,
         "grupos_incompletos_omitidos": 0,
         "partidos_reconstruidos": 0,
-        "jugadores_obligados_a_ganar": 0,
-        "jugadores_sin_necesidad_estricta": 0,
+        "partidos_con_al_menos_un_jugador_obligado": 0,
+        "casos_jugador_partido_obligado_a_ganar": 0,
+        "partidos_sin_obligacion_estricta": 0,
+        "casos_jugador_partido_sin_obligacion_estricta": 0,
     }
-    incomplete_groups = set()
     for snapshot in ordered:
         tid = str(snapshot.get("tournament_id") or "")
         payload = snapshot.get("payload") or {}
@@ -200,8 +202,10 @@ def acumular_historial_presion_reconstruido(snapshots):
             if reconstruction.get("completa"):
                 selected[key] = (tid, group_no, reconstruction)
             else:
-                incomplete_groups.add(key)
-    summary["grupos_incompletos_omitidos"] = len(incomplete_groups - set(selected))
+                incomplete_keys.add(key)
+
+    # El indicador cuenta grupos únicos que nunca tuvieron una versión completa.
+    summary["grupos_incompletos_omitidos"] = len(incomplete_keys - set(selected))
 
     players = defaultdict(lambda: {
         "jugador": "", "partidos_relevantes": 0, "victorias": 0,
@@ -214,11 +218,20 @@ def acumular_historial_presion_reconstruido(snapshots):
         for match in sequence:
             needs = match.get("necesidad_antes") or {}
             outcomes = match.get("cumplio_necesidad") or {}
+            obligated = [
+                name for name, detail in needs.items()
+                if detail.get("debe_ganar_por_puntos_para_seguir_en_fase")
+            ]
+            if obligated:
+                summary["partidos_con_al_menos_un_jugador_obligado"] += 1
+            else:
+                summary["partidos_sin_obligacion_estricta"] += 1
+
             for name, detail in needs.items():
                 if not detail.get("debe_ganar_por_puntos_para_seguir_en_fase"):
-                    summary["jugadores_sin_necesidad_estricta"] += 1
+                    summary["casos_jugador_partido_sin_obligacion_estricta"] += 1
                     continue
-                summary["jugadores_obligados_a_ganar"] += 1
+                summary["casos_jugador_partido_obligado_a_ganar"] += 1
                 outcome = outcomes.get(name)
                 # None indica que no se clasificó como obligación estricta.
                 if outcome is None:
@@ -252,8 +265,6 @@ def acumular_historial_presion_reconstruido(snapshots):
             "No mide presión psicológica ni puntos decisivos dentro de un set.",
         ],
     }
-
-
 def acumular_historial_presion(snapshots):
     """Prefiere la reconstrucción cronológica completa; conserva fallback legacy."""
     reconstructed = acumular_historial_presion_reconstruido(snapshots)
