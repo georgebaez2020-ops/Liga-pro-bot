@@ -260,9 +260,6 @@ def acumular_historial_presion(snapshots):
     return _acumular_historial_presion_snapshots(snapshots)
 
 
-def _acumular_historial_presion_snapshots(snapshots):
-    """Método anterior basado en cambios entre snapshots comparables."""
-
 def analizar_historial_guardado(db):
     """Lee los snapshots persistidos y devuelve el acumulado histórico."""
     return acumular_historial_presion(db.listar_snapshots())
