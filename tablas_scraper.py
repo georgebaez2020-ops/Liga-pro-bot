@@ -12,7 +12,8 @@ from playwright.async_api import async_playwright
 from db import HistoryDB
 from inteligencia_torneo import integrar_inteligencia_en_resultado
 from reconstruccion_torneo import (
-    consolidar_partidos_torneo, parsear_detalle_oficial, reconstruir_secuencia,
+    _nombre_ficha_coincide, consolidar_partidos_torneo, parsear_detalle_oficial,
+    parsear_marcador_sets_live, reconstruir_secuencia,
 )
 
 COL = ZoneInfo("America/Bogota")
@@ -51,6 +52,68 @@ JS_TORNEOS = r"""
   };
 })
 """
+
+JS_ENLACES_PARTIDOS = r"""
+(tid) => Array.from(document.querySelectorAll('a[href*="/en/tournaments/"]'))
+  .map(a => a.href)
+  .filter(href => {
+    const parts = new URL(href).pathname.split('/').filter(Boolean);
+    return parts.length >= 4 && parts[0] === 'en' &&
+      parts[1] === 'tournaments' && parts[2] === String(tid) &&
+      /^\\d+$/.test(parts[3]);
+  })
+  .filter((href, index, all) => all.indexOf(href) === index)
+"""
+
+
+def _marcador_en_ficha_partido(texto, jugador_a, jugador_b):
+    """Lee el marcador de sets entre los dos jugadores, sin confundir puntos del set."""
+    lineas = [line.strip() for line in str(texto or "").splitlines() if line.strip()]
+    pos_a = [i for i, line in enumerate(lineas)
+             if _nombre_ficha_coincide(line, str(jugador_a or ""))]
+    pos_b = [i for i, line in enumerate(lineas)
+             if _nombre_ficha_coincide(line, str(jugador_b or ""))]
+    if len(pos_a) != 1 or len(pos_b) != 1 or pos_a[0] == pos_b[0]:
+        return None
+    a, b = pos_a[0], pos_b[0]
+    lo, hi = sorted((a, b))
+    scores = [parsear_marcador_sets_live(line) for line in lineas[lo + 1:hi]]
+    scores = [score for score in scores if score is not None]
+    if len(scores) != 1:
+        return None
+    score = scores[0]
+    if a < b:
+        return score
+    left, right = score.split(":")
+    return f"{right}:{left}"
+
+
+async def enriquecer_marcadores_live(page, torneo_id, partidos):
+    """Consulta fichas individuales oficiales y añade solo parciales no ambiguos."""
+    live = [m for m in partidos if m.get("estado") == "live" and not m.get("marcador_live_sets")]
+    if not live:
+        return {"consultados": 0, "actualizados": 0}
+    enlaces = await page.evaluate(JS_ENLACES_PARTIDOS, str(torneo_id))
+    consultados = actualizados = 0
+    for href in enlaces:
+        try:
+            await page.goto(href, wait_until="domcontentloaded", timeout=30000)
+            texto = await page.locator("body").inner_text()
+            consultados += 1
+        except Exception:
+            continue
+        for partido in live:
+            if partido.get("marcador_live_sets"):
+                continue
+            score = _marcador_en_ficha_partido(
+                texto, partido.get("jugador_a"), partido.get("jugador_b")
+            )
+            if score is not None:
+                partido["marcador_live_sets"] = score
+                partido["fuente_marcador_live"] = href
+                actualizados += 1
+                break
+    return {"consultados": consultados, "actualizados": actualizados}
 
 
 def url_lista(dia_col):
@@ -212,6 +275,12 @@ async def extraer(page, torneo):
             "reconstruccion": reconstruido,
             "advertencias_extraccion": extraido["advertencias"],
         })
+    partidos_para_enriquecer = list(partidos_ficha_sin_grupo)
+    for analisis in analisis_cronologico:
+        partidos_para_enriquecer.extend(
+            p for p in analisis.get("partidos_ficha", []) if p.get("fase") == "group"
+        )
+    await enriquecer_marcadores_live(page, tid, partidos_para_enriquecer)
     calendario = consolidar_partidos_torneo(analisis_cronologico, partidos_ficha_sin_grupo)
     # La fecha se toma de la ficha oficial; las horas de Tournament games
     # corresponden a la hora local de la competición (Praga).
