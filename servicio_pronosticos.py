@@ -168,3 +168,65 @@ def buscar_rendimiento(nombre, db=None):
     needle = " ".join(str(nombre or "").split()).casefold()
     rows = [row for row in data if needle in row["jugador"].casefold()] if needle else []
     return rows[:5]
+
+
+
+async def consultar_torneos_oficiales(estados=None, max_torneos=30):
+    """Consulta en vivo la web oficial; no depende de la última captura guardada."""
+    from tablas_scraper import extraer_torneos_bajo_demanda
+    return await extraer_torneos_bajo_demanda(estados, max_torneos)
+
+
+def formatear_resumen_torneos(resultado):
+    lines = ["🏓 TORNEOS EN LA PÁGINA OFICIAL"]
+    tournaments = resultado.get("torneos") or {}
+    if not tournaments:
+        return "No encontré torneos en vivo o por comenzar en la fecha consultada."
+    for tid, torneo in tournaments.items():
+        state = str(torneo.get("estado") or "unknown").upper()
+        lines.append(
+            f"• ID {tid} | {state} | {torneo.get('fecha_torneo') or resultado.get('dia_colombia') or 'fecha no publicada'}"
+            f" | Grupos: {len(torneo.get('grupos') or [])}"
+        )
+    lines.append("\nConsulta de tablas: /tablas")
+    return "\n".join(lines)
+
+
+def formatear_tablas_torneos(resultado):
+    lines = ["📊 TABLAS DE TORNEOS EN VIVO Y POR COMENZAR"]
+    tournaments = resultado.get("torneos") or {}
+    if not tournaments:
+        return "No encontré torneos en vivo o por comenzar en la página oficial."
+    for tid, torneo in tournaments.items():
+        lines.append(
+            f"\n🏓 TORNEO {tid} — {str(torneo.get('estado') or 'unknown').upper()} "
+            f"— {torneo.get('fecha_torneo') or 'fecha no publicada'}"
+        )
+        groups = (torneo.get("inteligencia") or {}).get("grupos") or []
+        if not groups:
+            raw_groups = torneo.get("grupos") or []
+            if not raw_groups:
+                lines.append("Aún no hay grupos/tabla publicados en la ficha oficial.")
+                continue
+            for n, group in enumerate(raw_groups, 1):
+                lines.append(f"Grupo {n}: " + ", ".join(str(p.get("jugador") or "?") for p in group))
+            continue
+        for group in groups:
+            state = group.get("estado_clasificacion", "provisional").upper()
+            lines.append(f"\nGrupo {group.get('grupo', '?')} — {state}")
+            lines.append("Pos | Jugador | PJ | PG | PP | Pts")
+            for row in group.get("clasificacion") or []:
+                lines.append(
+                    f"{row.get('puesto_grupo')} | {row.get('jugador')} | "
+                    f"{row.get('partidos')} | {row.get('victorias')} | "
+                    f"{row.get('derrotas')} | {row.get('puntos_reglamento')}"
+                )
+            pending = group.get("partidos_pendientes") or []
+            if pending:
+                lines.append(f"Pendientes: {len(pending)}")
+            inconsistent = group.get("marcadores_inconsistentes") or []
+            if inconsistent:
+                lines.append(f"Advertencia: {len(inconsistent)} marcadores inconsistentes.")
+    lines.append("\nPJ: partidos jugados; PG: ganados; PP: perdidos; Pts: puntos de reglamento.")
+    lines.append("Las posiciones son provisionales mientras haya partidos pendientes.")
+    return "\n".join(lines)
