@@ -44,10 +44,26 @@ jobs:
               for match in tournament.get("partidos", [])
               if match.get("scheduled_at")
           ]
+          live_matches = [
+              (tid, match)
+              for tid, tournament in tournaments.items()
+              for match in tournament.get("partidos_en_vivo", [])
+          ]
+          live_with_score = [
+              (tid, match)
+              for tid, match in live_matches
+              if match.get("marcador_live_sets")
+          ]
           print("Fecha Colombia:", data.get("dia_colombia"))
           print("Resumen:", data.get("resumen"))
           print("Torneos:", len(tournaments))
           print("Partidos con horario verificable:", len(scheduled))
+          print("Partidos LIVE:", len(live_matches))
+          print("Partidos LIVE con marcador de sets:", len(live_with_score))
+          for tid, match in live_matches:
+              print("LIVE", tid, match.get("jugador_a"), "-", match.get("jugador_b"),
+                    "sets:", match.get("marcador_live_sets"),
+                    "texto:", match.get("marcador_live_texto"))
           for tid, tournament in tournaments.items():
               matches = tournament.get("partidos", [])
               planned = [m for m in matches if m.get("estado") in ("planned", "upcoming")]
@@ -70,6 +86,12 @@ jobs:
               raise SystemExit("El listado oficial no devolvió torneos; no se puede validar extracción real.")
           if not any(row.get("detalle_texto") for row in tournaments.values()):
               raise SystemExit("No se obtuvo texto visible de ninguna ficha de torneo.")
+          if live_matches and len(live_with_score) != len(live_matches):
+              missing = [
+                  f"{tid}: {match.get('jugador_a')} vs {match.get('jugador_b')}"
+                  for tid, match in live_matches if not match.get("marcador_live_sets")
+              ]
+              raise SystemExit("Partidos LIVE sin marcador de sets: " + "; ".join(missing))
           PY
       - name: Upload live scrape evidence
         if: always()
