@@ -86,7 +86,36 @@ async def calendario(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await _reply(update, f"Error consultando calendario: {type(exc).__name__}: {exc}")
 
 
-async def pronosticos(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+
+
+async def torneos(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if _scrape_lock.locked():
+        await _reply(update, "Ya hay una actualización oficial en curso. Intenta de nuevo en un momento.")
+        return
+    async with _scrape_lock:
+        await _reply(update, "🔎 Consultando ahora la página oficial de Czech Liga Pro...")
+        try:
+            result = await consultar_torneos_oficiales({"live", "upcoming"})
+            await _reply(update, formatear_resumen_torneos(result))
+        except Exception as exc:
+            logging.exception("Error consultando torneos oficiales")
+            await _reply(update, f"No pude consultar la página oficial: {type(exc).__name__}: {exc}")
+
+
+async def tablas(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if _scrape_lock.locked():
+        await _reply(update, "Ya hay una actualización oficial en curso. Intenta de nuevo en un momento.")
+        return
+    async with _scrape_lock:
+        await _reply(update, "🔎 Extrayendo torneos y calculando sus tablas desde la página oficial...")
+        try:
+            result = await consultar_torneos_oficiales({"live", "upcoming"})
+            await _reply(update, formatear_tablas_torneos(result))
+        except Exception as exc:
+            logging.exception("Error consultando tablas oficiales")
+            await _reply(update, f"No pude consultar las tablas oficiales: {type(exc).__name__}: {exc}")
+\n\nasync def pronosticos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         result = analizar_calendario()
         lines = [
@@ -289,7 +318,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("test", test))
     app.add_handler(CommandHandler("estado", estado))
-    app.add_handler(CommandHandler("calendario", calendario))
+    app.add_handler(CommandHandler("calendario", calendario))\n    app.add_handler(CommandHandler("torneos", torneos))\n    app.add_handler(CommandHandler("tablas", tablas))
     app.add_handler(CommandHandler("pronosticos", pronosticos))
     app.add_handler(CommandHandler("jugador", jugador))
     app.add_handler(CommandHandler("necesidad", necesidad))
