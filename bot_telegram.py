@@ -163,7 +163,7 @@ async def _actualizar_vistas_torneos(app):
             views.pop(chat_id, None)
 
 async def _actualizar_vistas_detalle(app):
-    """Actualiza el detalle y la tabla del torneo en el mismo mensaje."""
+    """Actualiza cada detalle abierto; conserva vistas ante fallos transitorios."""
     views = app.bot_data.get("vistas_detalle", {})
     if not views:
         return
@@ -172,11 +172,20 @@ async def _actualizar_vistas_detalle(app):
     except Exception:
         logging.exception("No se pudo cargar la memoria para actualizar detalles.")
         return
-    for chat_id, view in list(views.items()):
-        tid = view["tid"]
+
+    for key, view in list(views.items()):
+        chat_id = view.get("chat_id")
+        if chat_id is None:
+            chat_id = key[0] if isinstance(key, tuple) else key
+        tid = str(view.get("tid") or "")
         tournament = tournaments.get(tid)
         if not tournament:
+            logging.debug(
+                "Detalle %s pendiente: no aparece en la última memoria disponible.",
+                tid,
+            )
             continue
+
         text = _texto_telegram(_detalle_torneo(tid, tournament))
         if text == view.get("last_text"):
             continue
@@ -185,9 +194,24 @@ async def _actualizar_vistas_detalle(app):
                 chat_id=chat_id, message_id=view["message_id"], text=text
             )
             view["last_text"] = text
+            logging.info("Vista de torneo actualizada: chat=%s torneo=%s mensaje=%s",
+                         chat_id, tid, view["message_id"])
         except Exception as exc:
-            logging.info("Se cierra detalle dinámico del torneo %s: %s", tid, exc)
-            views.pop(chat_id, None)
+            message = str(exc).casefold()
+            if "message is not modified" in message:
+                view["last_text"] = text
+                continue
+            if any(marker in message for marker in (
+                "message to edit not found", "message can't be edited",
+                "chat not found", "bot was blocked by the user",
+            )):
+                logging.warning("Se cierra vista inexistente del torneo %s: %s", tid, exc)
+                views.pop(key, None)
+            else:
+                logging.exception(
+                    "Fallo transitorio al actualizar torneo %s; se conserva la vista.",
+                    tid,
+                )
 
 
 async def _enviar_vista_torneos(update, context, wanted, heading):
@@ -414,7 +438,8 @@ async def torneo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text = _texto_telegram(_detalle_torneo(tid, tournament))
         message = await update.effective_message.reply_text(text)
         views = context.application.bot_data.setdefault("vistas_detalle", {})
-        views[update.effective_chat.id] = {
+        views[(update.effective_chat.id, tid)] = {
+            "chat_id": update.effective_chat.id,
             "tid": tid,
             "message_id": message.message_id,
             "last_text": text,
