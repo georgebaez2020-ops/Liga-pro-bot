@@ -1,7 +1,9 @@
 import unittest
 from unittest.mock import patch
 
-from servicio_pronosticos import listar_calendario
+from servicio_pronosticos import (
+    listar_calendario, formatear_resumen_torneos, formatear_tablas_torneos,
+)
 from reconstruccion_torneo import parsear_detalle_oficial
 
 
@@ -32,6 +34,42 @@ class PredictionServiceTests(unittest.TestCase):
         rows = listar_calendario(tournaments)
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["estado"], "upcoming")
+
+    def test_live_tournament_summary_and_group_table_formatting(self):
+        result = {
+            "dia_colombia": "2026-11-18",
+            "torneos": {
+                "123": {
+                    "estado": "live",
+                    "fecha_torneo": "2026-11-18",
+                    "grupos": [[{"jugador": "Ana"}]],
+                    "inteligencia": {
+                        "grupos": [{
+                            "grupo": 1,
+                            "estado_clasificacion": "provisional",
+                            "clasificacion": [{
+                                "puesto_grupo": 1, "jugador": "Ana",
+                                "partidos": 2, "victorias": 2, "derrotas": 0,
+                                "puntos_reglamento": 4,
+                            }],
+                            "partidos_pendientes": [{"jugador_a": "Ana", "jugador_b": "Beto"}],
+                            "marcadores_inconsistentes": [],
+                        }]
+                    },
+                }
+            },
+        }
+        summary = formatear_resumen_torneos(result)
+        table = formatear_tablas_torneos(result)
+        self.assertIn("ID 123 | LIVE", summary)
+        self.assertIn("Grupo 1 — PROVISIONAL", table)
+        self.assertIn("Ana | 2 | 2 | 0 | 4", table)
+        self.assertIn("Pendientes: 1", table)
+
+    def test_upcoming_tournament_without_published_groups_is_explicit(self):
+        result = {"torneos": {"456": {"estado": "upcoming", "grupos": []}}}
+        table = formatear_tablas_torneos(result)
+        self.assertIn("Aún no hay grupos/tabla publicados", table)
 
     def test_official_tournament_date_is_extracted(self):
         parsed = parsear_detalle_oficial(
