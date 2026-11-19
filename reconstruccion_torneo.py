@@ -17,6 +17,20 @@ def _score(value):
     return (a, b) if a != b else None
 
 
+def parsear_marcador_sets_live(texto):
+    """Extrae un único marcador parcial de sets mostrado en una ficha LIVE."""
+    import re
+
+    encontrados = {
+        (int(a), int(b))
+        for a, b in re.findall(r"(?m)^\s*([0-3])\s*:\s*([0-3])\s*$", str(texto or ""))
+    }
+    if len(encontrados) != 1:
+        return None
+    a, b = encontrados.pop()
+    return f"{a}:{b}"
+
+
 def _best_place(points, pending, player):
     names = list(points)
     best = len(names)
