@@ -417,10 +417,20 @@ def parsear_detalle_oficial(texto, grupo):
             # sets ganados A, puntos de cada set A, sets ganados B,
             # puntos de cada set B.
             nums = []
+            markers = []
             k = j + 4
-            while k < len(lines) and len(nums) < 12 and re.fullmatch(r"\d+", lines[k]):
-                nums.append(int(lines[k]))
-                k += 1
+            # Algunas tarjetas oficiales insertan una marca literal "T" entre
+            # los dos números del marcador (p. ej. "T 3 0" o "0 T 3").
+            # Se conserva la marca sin atribuirle un significado no documentado.
+            while k < len(lines) and len(nums) < 12:
+                if re.fullmatch(r"\d+", lines[k]):
+                    nums.append(int(lines[k]))
+                    k += 1
+                elif lines[k].casefold() == "t":
+                    markers.append(lines[k])
+                    k += 1
+                else:
+                    break
             parsed = False
             if nums and 0 <= nums[0] <= 3:
                 sets_a = nums[0]
@@ -433,15 +443,15 @@ def parsear_detalle_oficial(texto, grupo):
                         if all(0 <= x <= 30 for x in candidate_a + candidate_b):
                             puntos_sets_a, puntos_sets_b = candidate_a, candidate_b
                             score = f"{sets_a}:{sets_b}"
-                            next_i = j + 4 + needed
+                            next_i = k
                             parsed = True
                             break
             if not parsed:
-                # Compatibilidad con páginas/fixtures antiguos que solo muestran
-                # el total de sets y no los puntos individuales.
-                if j + 5 < len(lines) and re.fullmatch(r"\d+", lines[j + 4]) and re.fullmatch(r"\d+", lines[j + 5]):
-                    score = f"{lines[j + 4]}:{lines[j + 5]}"
-                    next_i = j + 6
+                # Compatibilidad con tarjetas que solo muestran el total de sets,
+                # incluyendo las que insertan una marca literal "T" entre cifras.
+                if len(nums) == 2 and (nums[0] == 3 or nums[1] == 3):
+                    score = f"{nums[0]}:{nums[1]}"
+                    next_i = k
                 else:
                     warnings.append({"hora": hour, "motivo": "partido marcado FINISHED sin marcador completo"})
         elif status == "live":
@@ -451,8 +461,8 @@ def parsear_detalle_oficial(texto, grupo):
             "orden": len(matches) + 1, "hora": hour, "estado": status,
             "jugador_a": jugador_a, "jugador_b": jugador_b,
             "nombre_a_en_ficha": name1, "nombre_b_en_ficha": name2,
-            "marcador_sets": score, "puntos_sets_a": puntos_sets_a,
-            "puntos_sets_b": puntos_sets_b,
+            "marcador_sets": score, "marcador_marca": " ".join(markers) if status == "finished" and markers else None,
+            "puntos_sets_a": puntos_sets_a, "puntos_sets_b": puntos_sets_b,
             "puntos_juego_a": sum(puntos_sets_a) if puntos_sets_a else None,
             "puntos_juego_b": sum(puntos_sets_b) if puntos_sets_b else None,
             "fase": stage,
