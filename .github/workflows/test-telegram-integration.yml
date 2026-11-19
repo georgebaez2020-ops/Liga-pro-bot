@@ -33,4 +33,5 @@ jobs:
             test_db.py \
             test_backfill_historico.py \
             test_reconstruccion_torneo.py \
-            test_live_scraper.py
+            test_live_scraper.py \
+            tests/test_telegram_tournament_views.py
