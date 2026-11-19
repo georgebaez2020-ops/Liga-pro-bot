@@ -444,6 +444,25 @@ Franek T
             "1:2",
         )
 
+
+    def test_live_match_sheet_reads_set_score_not_current_game_points(self):
+        from tablas_scraper import _marcador_en_ficha_partido
+        # Formato observado en la ficha oficial: marcador del partido 1:0;
+        # debajo aparecen puntos del set actual (11:7 / 1:3), que no son sets.
+        page_text = """Torneo A12
+Volf Matej
+EN VIVO
+1:0
+11:7 / 1:3
+Dedek Jiri
+Estadisticas
+Hojas de partido
+"""
+        self.assertEqual(
+            _marcador_en_ficha_partido(page_text, "Volf Matej", "Dedek Jiri"),
+            "1:0",
+        )
+
     def test_live_match_sheet_rejects_ambiguous_abbreviated_names(self):
         from tablas_scraper import _marcador_en_ficha_partido
         page_text = """Match
