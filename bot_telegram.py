@@ -11,10 +11,7 @@ from zoneinfo import ZoneInfo
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
-from servicio_pronosticos import (
-    analizar_calendario, buscar_h2h, buscar_jugador, cargar_estado, informes,
-    listar_calendario, buscar_necesidad, buscar_rendimiento,
-)
+from servicio_pronosticos import cargar_estado, listar_calendario
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 SCRAPE_INTERVAL = max(60, int(os.getenv("SCRAPE_INTERVAL_SECONDS", "60")))
@@ -251,12 +248,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/proximos — torneos próximos\n"
         "/torneo NUMERO — partidos y desarrollo de un torneo\n"
         "/tabla NUMERO — clasificación por grupos del torneo\n"
-        "/pronosticos — análisis conservador de próximos partidos\n"
-        "/jugador NOMBRE — histórico de un jugador\n"
-        "/necesidad NOMBRE — respuesta histórica cuando debía ganar\n"
-        "/rendimiento NOMBRE — partidos competitivamente relevantes\n"
-        "/h2h JUGADOR 1 | JUGADOR 2 — enfrentamientos directos\n"
-        "/evaluacion — métricas de aciertos y calibración\n"
         "/test — comprobar conexión")
 
 
@@ -721,15 +712,8 @@ async def scrape_job(context: ContextTypes.DEFAULT_TYPE):
                 logging.info("Scraper actualizado correctamente:\n%s", tail)
                 await _actualizar_vistas_torneos(context.application)
                 await _actualizar_vistas_detalle(context.application)
-                try:
-                    from servicio_pronosticos import analizar_calendario
-                    result = analizar_calendario()
-                    logging.info("Ciclo predictivo: %s partidos analizados; %s pronósticos registrados; %s resultados liquidados.",
-                                 result["partidos_programados_analizados"],
-                                 result["pronosticos_registrados"],
-                                 result["liquidacion"]["liquidados"])
-                except Exception:
-                    logging.exception("Falló el ciclo predictivo posterior al scraper.")
+                # En esta fase solo actualizamos UPCOMING, LIVE y FINISHED.
+                # El análisis predictivo se mantiene fuera del ciclo para reducir RAM.
         except asyncio.TimeoutError:
             logging.exception("Tiempo agotado en scraper.")
         except Exception:
@@ -755,12 +739,6 @@ def main():
     app.add_handler(CommandHandler("finalizados", finalizados))
     app.add_handler(CommandHandler("torneo", torneo))
     app.add_handler(CommandHandler("tabla", tabla))
-    app.add_handler(CommandHandler("pronosticos", pronosticos))
-    app.add_handler(CommandHandler("jugador", jugador))
-    app.add_handler(CommandHandler("necesidad", necesidad))
-    app.add_handler(CommandHandler("rendimiento", rendimiento))
-    app.add_handler(CommandHandler("h2h", h2h))
-    app.add_handler(CommandHandler("evaluacion", evaluacion))
     if app.job_queue is None:
         raise RuntimeError("Instala python-telegram-bot[job-queue] para activar las actualizaciones.")
     app.job_queue.run_repeating(scrape_job, interval=SCRAPE_INTERVAL, first=10, name="scrape-czech-liga-pro")
