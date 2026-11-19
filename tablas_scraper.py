@@ -4,7 +4,7 @@ import json
 import os
 import re
 from datetime import datetime
-from urllib.parse import urljoin
+from urllib.parse import parse_qs, urlencode, urljoin, urlsplit, urlunsplit
 from zoneinfo import ZoneInfo
 
 from playwright.async_api import async_playwright
@@ -127,6 +127,24 @@ def url_lista(dia_col):
     return f"{BASE}?date_from={inicio}&date_to={fin}"
 
 
+def rango_fechas_praga(dia_col):
+    """Devuelve las fechas de Praga que cubren el día calendario de Colombia."""
+    y, m, d = (int(x) for x in dia_col.split("-"))
+    inicio = datetime(y, m, d, 0, 0, tzinfo=COL).astimezone(PRAGA).date()
+    fin = datetime(y, m, d, 23, 59, tzinfo=COL).astimezone(PRAGA).date()
+    return inicio.isoformat(), fin.isoformat()
+
+
+def _aplicar_filtro_fecha(url, fecha_desde, fecha_hasta):
+    """Conserva la paginación, pero fuerza siempre el rango del día solicitado."""
+    parts = urlsplit(url)
+    query = parse_qs(parts.query, keep_blank_values=True)
+    query["date_from"] = [fecha_desde]
+    query["date_to"] = [fecha_hasta]
+    return urlunsplit((parts.scheme, parts.netloc, parts.path,
+                       urlencode(query, doseq=True), parts.fragment))
+
+
 def normalizar_estado(texto, clase=""):
     """Clasifica usando la tarjeta concreta, no texto de contenedores globales."""
     clase = (clase or "").lower()
@@ -190,13 +208,14 @@ def armar_grupos(filas):
 
 async def descubrir(page, dia_col, estados_solicitados):
     """Recorre las páginas del listado y clasifica por la etiqueta visible."""
+    fecha_desde, fecha_hasta = rango_fechas_praga(dia_col)
     primera = url_lista(dia_col)
     pendientes = [primera]
     visitadas = set()
     encontrados = {}
 
     while pendientes and len(visitadas) < MAX_PAGINAS:
-        url = pendientes.pop(0)
+        url = _aplicar_filtro_fecha(pendientes.pop(0), fecha_desde, fecha_hasta)
         if url in visitadas:
             continue
         visitadas.add(url)
@@ -233,6 +252,7 @@ async def descubrir(page, dia_col, estados_solicitados):
             'a[href*="page="]', "(els) => els.map(a => a.href)"
         )
         for siguiente in paginas:
+            siguiente = _aplicar_filtro_fecha(siguiente, fecha_desde, fecha_hasta)
             if siguiente not in visitadas and siguiente not in pendientes:
                 pendientes.append(siguiente)
 
@@ -371,6 +391,14 @@ async def main():
             tid = torneo["id"]
             try:
                 dato = await extraer(page, torneo)
+                fecha_oficial = dato.get("fecha_torneo")
+                fecha_desde, fecha_hasta = rango_fechas_praga(dia)
+                if not fecha_oficial or not (fecha_desde <= fecha_oficial <= fecha_hasta):
+                    print(
+                        f"Torneo {tid} descartado: fecha oficial {fecha_oficial or 'no publicada'} "
+                        f"fuera del rango solicitado {fecha_desde} a {fecha_hasta} (Praga)."
+                    )
+                    continue
                 resultado["torneos"][tid] = dato
                 resultado["resumen"][dato["estado"]] += 1
             except Exception as exc:
