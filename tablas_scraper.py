@@ -341,6 +341,22 @@ async def extraer(page, torneo):
     }
 
 
+def clasificar_estado_partidos(partidos, estado_listado="unknown"):
+    """Determina el estado real del torneo usando el calendario de su ficha."""
+    estados = {
+        str(partido.get("estado") or "").casefold()
+        for partido in (partidos or [])
+        if partido.get("estado")
+    }
+    if "live" in estados:
+        return "live"
+    if estados.intersection({"planned", "upcoming"}):
+        return "upcoming"
+    if estados and estados.issubset({"finished"}):
+        return "finished"
+    return estado_listado or "unknown"
+
+
 def estados_configurados():
     raw = os.getenv("STATUS", "all").strip().lower()
     if raw in ("", "all", "todos"):
@@ -391,6 +407,12 @@ async def main():
             tid = torneo["id"]
             try:
                 dato = await extraer(page, torneo)
+                # El estado del listado puede ser demasiado amplio (por ejemplo,
+                # una tarjeta dentro del bloque de partidos LIVE). La ficha de
+                # cada torneo es la fuente de verdad para su estado real.
+                dato["estado"] = clasificar_estado_partidos(
+                    dato.get("partidos", []), dato.get("estado", "unknown")
+                )
                 fecha_oficial = dato.get("fecha_torneo")
                 fecha_desde, fecha_hasta = rango_fechas_praga(dia)
                 fechas_partidos_col = {
