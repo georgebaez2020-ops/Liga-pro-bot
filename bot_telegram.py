@@ -118,7 +118,9 @@ async def tablas(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as exc:
             logging.exception("Error consultando tablas oficiales")
             await _reply(update, f"No pude consultar las tablas oficiales: {type(exc).__name__}: {exc}")
-\n\nasync def pronosticos(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+
+async def pronosticos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         result = analizar_calendario()
         lines = [
