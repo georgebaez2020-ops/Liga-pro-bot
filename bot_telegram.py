@@ -174,10 +174,10 @@ def _detalle_torneo(tid, tournament):
     if live:
         lines.append("\n🔴 PARTIDOS EN VIVO")
         for match in live:
-            parcial = match.get("marcador_live_texto")
+            parcial = match.get("marcador_live_sets")
             detalle_parcial = (
-                f" | marcador LIVE publicado: {parcial}"
-                if parcial else " | la ficha no publicó cifras de marcador en esta extracción"
+                f" | sets: {parcial}"
+                if parcial is not None else " | marcador parcial no disponible en la ficha"
             )
             lines.append(
                 f"• {match.get('jugador_a', '?')} vs {match.get('jugador_b', '?')} "
