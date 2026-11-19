@@ -58,8 +58,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/estado — estado de la memoria y torneos\n"
         "/calendario — partidos programados y en vivo\n"
         "/torneos — torneos en vivo y próximos\n"
-        "/vivo — torneos que están en juego\n"
-        "/proximos — torneos próximos\n"
+        "/vivo — partidos y marcadores en directo\n"
+        "/proximos — partidos programados\n"
         "/torneo ID — tabla y desarrollo de un torneo\n"
         "/pronosticos — análisis conservador de próximos partidos\n"
         "/jugador NOMBRE — histórico de un jugador\n"
@@ -120,22 +120,72 @@ async def torneos(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await _reply(update, f"Error consultando torneos: {type(exc).__name__}: {exc}")
 
 
+def _partidos_de_torneos(tournaments, wanted):
+    """Aplana los partidos de torneos cuyo estado coincide con wanted."""
+    rows = []
+    for tid, tournament in tournaments.items():
+        if str(tournament.get("estado") or "unknown").casefold() not in wanted:
+            continue
+        for match in tournament.get("partidos") or []:
+            if str(match.get("estado") or "").casefold() in wanted:
+                rows.append((str(tid), tournament, match))
+    return rows
+
+
+def _formatear_partidos(tournaments, wanted, heading):
+    rows = _partidos_de_torneos(tournaments, wanted)
+    if not rows:
+        count = len(_torneos_por_estado(tournaments, wanted))
+        if count:
+            return (
+                f"{heading}\\nHay {count} torneo(s) en esta categoría, pero la última extracción "
+                "no encontró partidos individuales. Usa /torneo NUMERO para revisar su ficha."
+            )
+        return heading + "\\nNo hay partidos en esta categoría en la última extracción."
+
+    lines = [heading, f"Partidos encontrados: {len(rows)}"]
+    rows.sort(key=lambda row: (
+        str(row[2].get("scheduled_at") or row[2].get("hora_colombia") or ""),
+        row[0],
+    ))
+    for tid, tournament, match in rows[:45]:
+        date = match.get("fecha_colombia") or tournament.get("fecha_torneo") or "fecha no publicada"
+        time = match.get("hora_colombia") or match.get("hora") or "hora no publicada"
+        group = match.get("grupo") or "—"
+        pair = f"{match.get('jugador_a') or '?'} vs {match.get('jugador_b') or '?'}"
+        if str(match.get("estado") or "").casefold() == "live":
+            score = match.get("marcador_live_sets")
+            score_text = f" | sets {score}" if score is not None else ""
+            lines.append(
+                f"\\n🔴 {pair}{score_text}\\nTorneo #{tid} | Grupo {group} | {date}"
+                f"\\nDetalle: /torneo {tid}"
+            )
+        else:
+            lines.append(
+                f"\\n⏳ {pair}\\nTorneo #{tid} | Grupo {group} | "
+                f"Colombia {time} | {date}\\nDetalle: /torneo {tid}"
+            )
+    if len(rows) > 45:
+        lines.append(f"\\nSe muestran 45 de {len(rows)} partidos.")
+    return "\\n".join(lines)
+
+
 async def vivo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         _, _, tournaments = cargar_estado()
-        await _reply(update, _formatear_torneos(tournaments, {"live"}, "🔴 TORNEOS EN VIVO"))
+        await _reply(update, _formatear_partidos(tournaments, {"live"}, "🔴 PARTIDOS EN VIVO"))
     except Exception as exc:
         logging.exception("Error en /vivo")
-        await _reply(update, f"Error consultando torneos en vivo: {type(exc).__name__}: {exc}")
+        await _reply(update, f"Error consultando partidos en vivo: {type(exc).__name__}: {exc}")
 
 
 async def proximos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         _, _, tournaments = cargar_estado()
-        await _reply(update, _formatear_torneos(tournaments, {"upcoming"}, "🗓️ PRÓXIMOS TORNEOS"))
+        await _reply(update, _formatear_partidos(tournaments, {"upcoming"}, "🗓️ PRÓXIMOS PARTIDOS"))
     except Exception as exc:
         logging.exception("Error en /proximos")
-        await _reply(update, f"Error consultando próximos torneos: {type(exc).__name__}: {exc}")
+        await _reply(update, f"Error consultando próximos partidos: {type(exc).__name__}: {exc}")
 
 
 def _tabla_grupo_texto(analisis):
