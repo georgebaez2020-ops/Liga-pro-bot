@@ -268,7 +268,7 @@ def acumular_historial_presion_reconstruido(snapshots):
 def acumular_historial_presion(snapshots):
     """Prefiere la reconstrucción cronológica completa; conserva fallback legacy."""
     reconstructed = acumular_historial_presion_reconstruido(snapshots)
-    if reconstructed["resumen"]["jugadores_obligados_a_ganar"] > 0:
+    if reconstructed["resumen"]["casos_jugador_partido_obligado_a_ganar"] > 0:
         return reconstructed
     return _acumular_historial_presion_snapshots(snapshots)
 
