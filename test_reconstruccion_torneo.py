@@ -414,21 +414,21 @@ Player D
         from reconstruccion_torneo import parsear_marcador_sets_live
         self.assertEqual(parsear_marcador_sets_live("0:0"), "0:0")
         self.assertEqual(parsear_marcador_sets_live("1:2"), "1:2")
-        self.assertIsNone(parsear_marcador_sets_live("1:2\\n0:1"))
+        self.assertIsNone(parsear_marcador_sets_live("1:2\n0:1"))
         self.assertIsNone(parsear_marcador_sets_live("11:7 / 1:3"))
 
     def test_live_match_page_score_is_mapped_to_tournament_player_order(self):
         from tablas_scraper import _marcador_en_ficha_partido
-        text = "Match\\nFranek T\\n1:2\\nSkakal M\\n"
+        text = "Match\nFranek T\n1:2\nSkakal M\n"
         self.assertEqual(_marcador_en_ficha_partido(text, "Franek Tomas", "Skakal Martin"), "1:2")
-        reversed_text = "Match\\nSkakal M\\n2:1\\nFranek T\\n"
+        reversed_text = "Match\nSkakal M\n2:1\nFranek T\n"
         self.assertEqual(_marcador_en_ficha_partido(reversed_text, "Franek Tomas", "Skakal Martin"), "1:2")
 
     def test_live_match_page_ignores_current_game_points_and_ambiguous_names(self):
         from tablas_scraper import _marcador_en_ficha_partido
-        text = "Torneo\\nVolf Matej\\nEN VIVO\\n1:0\\n11:7 / 1:3\\nDedek Jiri\\n"
+        text = "Torneo\nVolf Matej\nEN VIVO\n1:0\n11:7 / 1:3\nDedek Jiri\n"
         self.assertEqual(_marcador_en_ficha_partido(text, "Volf Matej", "Dedek Jiri"), "1:0")
-        ambiguous = "Match\\nHrabec J\\n1:2\\nHrabec Jan\\n"
+        ambiguous = "Match\nHrabec J\n1:2\nHrabec Jan\n"
         self.assertIsNone(_marcador_en_ficha_partido(ambiguous, "Hrabec Jan", "Hrabec Jiri"))
 
 
