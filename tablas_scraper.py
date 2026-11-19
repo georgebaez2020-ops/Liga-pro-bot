@@ -417,18 +417,19 @@ async def main():
             tid = torneo["id"]
             try:
                 dato = await extraer(page, torneo)
-                # La categoría seleccionada en el listado oficial (LIVE,
-                # UPCOMING o FINISHED) es la fuente de verdad del torneo.
-                # El estado de los partidos de grupo NO debe reemplazarla:
-                # un grupo puede haber acabado y el torneo seguir en curso.
+                # Reconciliamos la etiqueta del listado con el calendario extraído.
+                # Un estado LIVE obsoleto no debe prevalecer si todos los partidos
+                # que publica la ficha ya terminaron. Si aún hay partidos LIVE o
+                # pendientes, el torneo conserva ese estado operativo.
                 estado_oficial = str(torneo.get("estado") or "unknown").casefold()
-                if estado_oficial in ESTADOS:
-                    dato["estado"] = estado_oficial
-                else:
-                    # Solo si el listado no permitió leer la categoría,
-                    # usamos el calendario de la ficha como respaldo.
-                    dato["estado"] = clasificar_estado_partidos(
-                        dato.get("partidos", []), "unknown"
+                estado_calendario = clasificar_estado_partidos(
+                    dato.get("partidos", []), estado_oficial
+                )
+                dato["estado"] = estado_calendario
+                if estado_calendario != estado_oficial:
+                    print(
+                        f"Torneo {tid}: estado del listado={estado_oficial}; "
+                        f"estado según partidos={estado_calendario}. Se guarda {estado_calendario}."
                     )
                 fecha_oficial = dato.get("fecha_torneo")
                 fecha_desde, fecha_hasta = rango_fechas_praga(dia)
