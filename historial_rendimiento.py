@@ -10,6 +10,7 @@ from collections import defaultdict
 from copy import deepcopy
 
 from inteligencia_torneo import _score, calcular_clasificacion
+from reconstruccion_torneo import reconstruir_secuencia
 
 
 def _key(name):
@@ -169,22 +170,22 @@ def _acumular_historial_presion_snapshots(snapshots):
 def acumular_historial_presion_reconstruido(snapshots):
     """Agrega respuestas a necesidad de ganar desde secuencias cronológicas completas.
 
-    Usa la reconstrucción guardada en cada ficha. Solo cuenta grupos cuya
-    secuencia de partidos esté completa; así no supone que los partidos que
-    faltan en una ficha todavía estaban pendientes.
+    Recalcula desde las tarjetas originales cuando están guardadas. Así aplica
+    las reglas actuales también a snapshots históricos antiguos sin reescribir
+    la base de datos. Solo usa grupos completos.
     """
     ordered = sorted(
         snapshots,
         key=lambda item: (str(item.get("captured_at") or ""), str(item.get("tournament_id") or "")),
     )
-    # Una ficha puede aparecer en varios snapshots; usar la última reconstrucción
-    # completa por torneo/grupo evita duplicar los partidos.
     selected = {}
     incomplete_keys = set()
     summary = {
         "snapshots_procesados": len(ordered),
         "grupos_con_reconstruccion_completa": 0,
         "grupos_incompletos_omitidos": 0,
+        "grupos_recalculados_desde_partidos": 0,
+        "grupos_usa_reconstruccion_guardada": 0,
         "partidos_reconstruidos": 0,
         "partidos_con_al_menos_un_jugador_obligado": 0,
         "casos_jugador_partido_obligado_a_ganar": 0,
@@ -195,23 +196,53 @@ def acumular_historial_presion_reconstruido(snapshots):
         tid = str(snapshot.get("tournament_id") or "")
         payload = snapshot.get("payload") or {}
         tournament = payload.get("torneo") if isinstance(payload.get("torneo"), dict) else payload
+        groups = tournament.get("grupos") or []
         for item in tournament.get("analisis_cronologico") or []:
             reconstruction = item.get("reconstruccion") or {}
             group_no = item.get("grupo")
             key = (tid, str(group_no))
             if reconstruction.get("completa"):
-                selected[key] = (tid, group_no, reconstruction)
+                # Mantener la última ficha completa por torneo/grupo.
+                selected[key] = (tid, group_no, item, groups)
             else:
                 incomplete_keys.add(key)
 
-    # El indicador cuenta grupos únicos que nunca tuvieron una versión completa.
-    summary["grupos_incompletos_omitidos"] = len(incomplete_keys - set(selected))
-
+    incomplete_final = incomplete_keys - set(selected)
     players = defaultdict(lambda: {
         "jugador": "", "partidos_relevantes": 0, "victorias": 0,
         "derrotas": 0, "torneos_con_muestra": set(),
     })
-    for (tid, _), (tournament_id, group_no, reconstruction) in selected.items():
+    for key, (tournament_id, group_no, item, groups) in selected.items():
+        stored = item.get("reconstruccion") or {}
+        reconstruction = stored
+        try:
+            group_index = int(group_no) - 1
+        except (TypeError, ValueError):
+            group_index = -1
+        roster = groups[group_index] if 0 <= group_index < len(groups) else None
+        raw_matches = item.get("partidos_ficha")
+        if isinstance(raw_matches, list) and roster:
+            summary["grupos_recalculados_desde_partidos"] += 1
+            group_matches = [
+                match for match in raw_matches
+                if str(match.get("estado") or "").casefold() == "finished"
+                and str(match.get("fase") or "").casefold() == "group"
+            ]
+            try:
+                reconstruction = reconstruir_secuencia(
+                    [str(player.get("jugador") or "").strip() for player in roster],
+                    group_matches,
+                    item.get("rating_por_jugador") or {},
+                )
+            except (ValueError, TypeError, KeyError):
+                reconstruction = {}
+        else:
+            summary["grupos_usa_reconstruccion_guardada"] += 1
+
+        if not reconstruction.get("completa"):
+            incomplete_final.add(key)
+            continue
+
         summary["grupos_con_reconstruccion_completa"] += 1
         sequence = reconstruction.get("secuencia") or []
         summary["partidos_reconstruidos"] += len(sequence)
@@ -233,7 +264,6 @@ def acumular_historial_presion_reconstruido(snapshots):
                     continue
                 summary["casos_jugador_partido_obligado_a_ganar"] += 1
                 outcome = outcomes.get(name)
-                # None indica que no se clasificó como obligación estricta.
                 if outcome is None:
                     continue
                 row = players[_key(name)]
@@ -242,6 +272,7 @@ def acumular_historial_presion_reconstruido(snapshots):
                 row["victorias" if outcome else "derrotas"] += 1
                 row["torneos_con_muestra"].add(tournament_id)
 
+    summary["grupos_incompletos_omitidos"] = len(incomplete_final)
     output = []
     for _, row in sorted(players.items(), key=lambda item: item[1]["jugador"].casefold()):
         sample = row["partidos_relevantes"]
@@ -261,6 +292,7 @@ def acumular_historial_presion_reconstruido(snapshots):
         "jugadores": output,
         "limitaciones": [
             "Solo se incluyen grupos con reconstrucción completa de todos los partidos esperados.",
+            "Cuando están disponibles las tarjetas originales, la cronología se recalcula para aplicar la versión actual de las reglas.",
             "La necesidad se estima por puntos de partido; los desempates pueden cambiar la clasificación.",
             "No mide presión psicológica ni puntos decisivos dentro de un set.",
         ],
