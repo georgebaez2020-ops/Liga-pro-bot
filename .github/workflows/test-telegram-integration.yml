@@ -9,6 +9,7 @@ on:
     branches:
       - feature/status-upcoming-live-finished
       - integration/telegram-prediction-engine
+      - feature/consulta-en-vivo-torneos-tablas
 
 permissions:
   contents: read
