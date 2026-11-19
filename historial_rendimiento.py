@@ -24,7 +24,7 @@ def _valid_score(group, i, j):
     return sa if sa is not None and sb == (sa[1], sa[0]) else None
 
 
-def acumular_historial_presion(snapshots):
+def _acumular_historial_presion_snapshots(snapshots):
     """Reconstruye nuevos resultados entre snapshots y agrega métricas por jugador.
 
     Cada snapshot debe tener tournament_id, captured_at y payload con grupos.
@@ -164,6 +164,104 @@ def acumular_historial_presion(snapshots):
         ],
     }
 
+
+
+def acumular_historial_presion_reconstruido(snapshots):
+    """Agrega respuestas a necesidad de ganar desde secuencias cronológicas completas.
+
+    Usa la reconstrucción guardada en cada ficha. Solo cuenta grupos cuya
+    secuencia de partidos esté completa; así no supone que los partidos que
+    faltan en una ficha todavía estaban pendientes.
+    """
+    ordered = sorted(
+        snapshots,
+        key=lambda item: (str(item.get("captured_at") or ""), str(item.get("tournament_id") or "")),
+    )
+    # Una ficha puede aparecer en varios snapshots; usar una sola reconstrucción
+    # completa por torneo/grupo evita contar el mismo partido varias veces.
+    selected = {}
+    summary = {
+        "snapshots_procesados": len(ordered),
+        "grupos_con_reconstruccion_completa": 0,
+        "grupos_incompletos_omitidos": 0,
+        "partidos_reconstruidos": 0,
+        "partidos_obligado_a_ganar": 0,
+        "partidos_sin_necesidad_estricta": 0,
+    }
+    for snapshot in ordered:
+        tid = str(snapshot.get("tournament_id") or "")
+        payload = snapshot.get("payload") or {}
+        tournament = payload.get("torneo") if isinstance(payload.get("torneo"), dict) else payload
+        for item in tournament.get("analisis_cronologico") or []:
+            reconstruction = item.get("reconstruccion") or {}
+            group_no = item.get("grupo")
+            key = (tid, str(group_no))
+            if reconstruction.get("completa"):
+                selected[key] = (tid, group_no, reconstruction)
+            elif key not in selected:
+                summary["grupos_incompletos_omitidos"] += 1
+
+    players = defaultdict(lambda: {
+        "jugador": "", "partidos_relevantes": 0, "victorias": 0,
+        "derrotas": 0, "torneos_con_muestra": set(),
+    })
+    for (tid, _), (tournament_id, group_no, reconstruction) in selected.items():
+        summary["grupos_con_reconstruccion_completa"] += 1
+        sequence = reconstruction.get("secuencia") or []
+        summary["partidos_reconstruidos"] += len(sequence)
+        for match in sequence:
+            needs = match.get("necesidad_antes") or {}
+            outcomes = match.get("cumplio_necesidad") or {}
+            for name, detail in needs.items():
+                if not detail.get("debe_ganar_por_puntos_para_seguir_en_fase"):
+                    summary["partidos_sin_necesidad_estricta"] += 1
+                    continue
+                summary["partidos_obligado_a_ganar"] += 1
+                outcome = outcomes.get(name)
+                # None indica que no se clasificó como obligación estricta.
+                if outcome is None:
+                    continue
+                row = players[_key(name)]
+                row["jugador"] = name
+                row["partidos_relevantes"] += 1
+                row["victorias" if outcome else "derrotas"] += 1
+                row["torneos_con_muestra"].add(tournament_id)
+
+    output = []
+    for _, row in sorted(players.items(), key=lambda item: item[1]["jugador"].casefold()):
+        sample = row["partidos_relevantes"]
+        output.append({
+            **row,
+            "torneos_con_muestra": len(row["torneos_con_muestra"]),
+            "tasa_victoria": round(row["victorias"] / sample, 4) if sample else None,
+            "muestra_suficiente": sample >= 10,
+            "interpretacion": (
+                "Sin muestra suficiente; no inferir una tendencia."
+                if sample < 10 else
+                "Tendencia descriptiva de resultados en partidos que debía ganar; no mide presión psicológica."
+            ),
+        })
+    return {
+        "resumen": summary,
+        "jugadores": output,
+        "limitaciones": [
+            "Solo se incluyen grupos con reconstrucción completa de todos los partidos esperados.",
+            "La necesidad se estima por puntos de partido; los desempates pueden cambiar la clasificación.",
+            "No mide presión psicológica ni puntos decisivos dentro de un set.",
+        ],
+    }
+
+
+def acumular_historial_presion(snapshots):
+    """Prefiere la reconstrucción cronológica completa; conserva fallback legacy."""
+    reconstructed = acumular_historial_presion_reconstruido(snapshots)
+    if reconstructed["resumen"]["partidos_obligado_a_ganar"] > 0:
+        return reconstructed
+    return _acumular_historial_presion_snapshots(snapshots)
+
+
+def _acumular_historial_presion_snapshots(snapshots):
+    """Método anterior basado en cambios entre snapshots comparables."""
 
 def analizar_historial_guardado(db):
     """Lee los snapshots persistidos y devuelve el acumulado histórico."""
