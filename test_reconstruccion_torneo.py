@@ -360,10 +360,10 @@ Stefek M
 
     def test_parses_only_unambiguous_live_set_score(self):
         from reconstruccion_torneo import parsear_marcador_sets_live
-        self.assertEqual(parsear_marcador_sets_live("Match\\nLive\\nPlayer A\\n1:2\\nPlayer B"), "1:2")
-        self.assertIsNone(parsear_marcador_sets_live("Match\\nLive\\n0:0\\nPlayer A"))
-        self.assertIsNone(parsear_marcador_sets_live("Live\\n1:2\\nCurrent matches\\n0:1"))
-        self.assertIsNone(parsear_marcador_sets_live("Live\\nDuration: 0 min"))
+        self.assertEqual(parsear_marcador_sets_live("Match\nLive\nPlayer A\n1:2\nPlayer B"), "1:2")
+        self.assertIsNone(parsear_marcador_sets_live("Match\nLive\n0:0\nPlayer A"))
+        self.assertIsNone(parsear_marcador_sets_live("Live\n1:2\nCurrent matches\n0:1"))
+        self.assertIsNone(parsear_marcador_sets_live("Live\nDuration: 0 min"))
 
 
     def test_live_partial_score_is_not_treated_as_finished(self):
