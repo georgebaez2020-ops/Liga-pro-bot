@@ -1,5 +1,4 @@
 import unittest
-from unittest.mock import patch
 
 from servicio_pronosticos import (
     listar_calendario, formatear_resumen_torneos, formatear_tablas_torneos,
@@ -42,7 +41,15 @@ class PredictionServiceTests(unittest.TestCase):
                 "123": {
                     "estado": "live",
                     "fecha_torneo": "2026-11-18",
-                    "grupos": [[{"jugador": "Ana"}]],\n                    "partidos_finalizados": [{"fase": "group", "grupo": 1, "jugador_a": "Ana", "jugador_b": "Beto", "marcador_sets": "3:1"}],\n                    "partidos_en_vivo": [{"fase": "group", "grupo": 1, "jugador_a": "Ciro", "jugador_b": "Dora", "marcador_sets": None}],
+                    "grupos": [[{"jugador": "Ana"}]],
+                    "partidos_finalizados": [
+                        {"fase": "group", "grupo": 1, "jugador_a": "Ana",
+                         "jugador_b": "Beto", "marcador_sets": "3:1"}
+                    ],
+                    "partidos_en_vivo": [
+                        {"fase": "group", "grupo": 1, "jugador_a": "Ciro",
+                         "jugador_b": "Dora", "marcador_sets": None}
+                    ],
                     "inteligencia": {
                         "grupos": [{
                             "grupo": 1,
@@ -56,7 +63,12 @@ class PredictionServiceTests(unittest.TestCase):
                             "marcadores_inconsistentes": [],
                         }]
                     },
-                }
+                },
+                "456": {
+                    "estado": "upcoming",
+                    "fecha_torneo": "2026-11-18",
+                    "grupos": [],
+                },
             },
         }
         summary = formatear_resumen_torneos(result)
@@ -64,22 +76,28 @@ class PredictionServiceTests(unittest.TestCase):
         self.assertIn("ID 123 | LIVE", summary)
         self.assertIn("Grupo 1 — PROVISIONAL", table)
         self.assertIn("Ana | 2 | 2 | 0 | 4", table)
-        self.assertIn("pendientes: 1", table)\n        self.assertIn("RESULTADOS FINALIZADOS", table)\n        self.assertIn("Ana 3:1 Beto", table)\n        self.assertIn("PARTIDOS EN JUEGO", table)\n        self.assertIn("Ciro vs Dora", table)\n        self.assertNotIn("UPCOMING", table)
+        self.assertIn("pendientes: 1", table)
+        self.assertIn("RESULTADOS FINALIZADOS", table)
+        self.assertIn("Ana 3:1 Beto", table)
+        self.assertIn("PARTIDOS EN JUEGO", table)
+        self.assertIn("Ciro vs Dora", table)
+        self.assertNotIn("456", table)
+        self.assertNotIn("UPCOMING", table)
 
-    def test_upcoming_tournament_without_published_groups_is_explicit(self):
+    def test_tables_without_live_tournaments_say_none_are_active(self):
         result = {"torneos": {"456": {"estado": "upcoming", "grupos": []}}}
         table = formatear_tablas_torneos(result)
         self.assertIn("No hay torneos LIVE", table)
 
     def test_official_tournament_date_is_extracted(self):
         parsed = parsear_detalle_oficial(
-            "Players\nPlayer\nTournament games\nGroup\n17 Nov 2026\nTuesday\n08:00",
+            "Players\\nPlayer\\nTournament games\\nGroup\\n17 Nov 2026\\nTuesday\\n08:00",
             [],
         )
         self.assertEqual(parsed["fecha_torneo"], "2026-11-17")
 
     def test_missing_official_date_remains_unknown(self):
-        parsed = parsear_detalle_oficial("Players\nTournament games\nPlanned\n08:00", [])
+        parsed = parsear_detalle_oficial("Players\\nTournament games\\nPlanned\\n08:00", [])
         self.assertIsNone(parsed["fecha_torneo"])
         self.assertTrue(any("fecha oficial" in x.get("motivo", "") for x in parsed["advertencias"]))
 
