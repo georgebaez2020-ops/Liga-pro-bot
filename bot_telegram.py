@@ -38,7 +38,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/estado — estado de la memoria y torneos\n"
         "/calendario — partidos programados y en vivo\n"
         "/torneos — torneos en vivo y por comenzar (consulta oficial)\n"
-        "/tablas — tablas de esos torneos (consulta oficial)\n"
+        "/tablas — tablas y resultados de torneos en vivo\n"
         "/pronosticos — análisis conservador de próximos partidos\n"
         "/jugador NOMBRE — histórico de un jugador\n"
         "/necesidad NOMBRE — respuesta histórica cuando debía ganar\n"
@@ -113,7 +113,7 @@ async def tablas(update: Update, context: ContextTypes.DEFAULT_TYPE):
     async with _scrape_lock:
         await _reply(update, "🔎 Extrayendo torneos y calculando sus tablas desde la página oficial...")
         try:
-            result = await consultar_torneos_oficiales({"live", "upcoming"})
+            result = await consultar_torneos_oficiales({"live"})
             await _reply(update, formatear_tablas_torneos(result))
         except Exception as exc:
             logging.exception("Error consultando tablas oficiales")
