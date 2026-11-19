@@ -454,14 +454,34 @@ def parsear_detalle_oficial(texto, grupo):
                     next_i = k
                 else:
                     warnings.append({"hora": hour, "motivo": "partido marcado FINISHED sin marcador completo"})
-        elif status == "live":
-            # Un marcador parcial en vivo no se registra como resultado final.
-            pass
+        marcador_live_tokens = []
+        marcador_live_texto = None
+        if status == "live":
+            # Conserva los números visibles del marcador en vivo, pero no los
+            # interpreta como sets ganados ni los incorpora a la reconstrucción.
+            # El formato de la tarjeta LIVE puede variar; por eso se expone la
+            # secuencia literal y no se inventa qué cifra corresponde a cada set.
+            k = j + 4
+            while k < len(lines) and len(marcador_live_tokens) < 8:
+                token = lines[k].strip()
+                if re.fullmatch(r"\d{1,2}", token):
+                    marcador_live_tokens.append(token)
+                    k += 1
+                elif token.casefold() == "t":
+                    marcador_live_tokens.append(token.upper())
+                    k += 1
+                else:
+                    break
+            if marcador_live_tokens:
+                marcador_live_texto = " ".join(marcador_live_tokens)
+                next_i = k
         matches.append({
             "orden": len(matches) + 1, "hora": hour, "estado": status,
             "jugador_a": jugador_a, "jugador_b": jugador_b,
             "nombre_a_en_ficha": name1, "nombre_b_en_ficha": name2,
             "marcador_sets": score, "marcador_marca": " ".join(markers) if status == "finished" and markers else None,
+            "marcador_live_tokens": marcador_live_tokens,
+            "marcador_live_texto": marcador_live_texto,
             "puntos_sets_a": puntos_sets_a, "puntos_sets_b": puntos_sets_b,
             "puntos_juego_a": sum(puntos_sets_a) if puntos_sets_a else None,
             "puntos_juego_b": sum(puntos_sets_b) if puntos_sets_b else None,
