@@ -352,9 +352,15 @@ async def extraer(page, torneo):
 
 
 def clasificar_estado_partidos(partidos, estado_listado="unknown"):
-    """Determina el estado real del torneo usando el calendario de su ficha."""
+    """
+    Interpreta el estado operativo desde los partidos de la ficha oficial.
+
+    La etiqueta del listado solo sirve para descubrir el torneo: nunca puede
+    convertir por sí sola un torneo en LIVE. Para declarar LIVE debe existir
+    al menos un partido cuyo marcador/estado oficial sea LIVE.
+    """
     estados = {
-        str(partido.get("estado") or "").casefold()
+        str(partido.get("estado") or "").strip().casefold()
         for partido in (partidos or [])
         if partido.get("estado")
     }
@@ -364,7 +370,10 @@ def clasificar_estado_partidos(partidos, estado_listado="unknown"):
         return "upcoming"
     if estados and estados.issubset({"finished"}):
         return "finished"
-    return estado_listado or "unknown"
+
+    # Si la ficha no permitió leer estados de partidos, no inventar uno
+    # heredándolo de una etiqueta posiblemente vieja del listado.
+    return "unknown"
 
 
 def estados_configurados():
