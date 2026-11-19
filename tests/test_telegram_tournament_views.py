@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import patch
 
 import bot_telegram
+import tablas_scraper
 
 
 class FakeBot:
@@ -30,6 +31,26 @@ class TournamentViewsTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Torneo #38185", text)
         self.assertIn("Jugador A", text)
         self.assertIn("Grupo 1", text)
+
+    def test_tournament_list_excludes_old_dates(self):
+        tournaments = {
+            "today": {"estado": "live", "fecha_torneo": "2026-11-19"},
+            "old": {"estado": "live", "fecha_torneo": "2026-11-18"},
+            "unknown": {"estado": "upcoming"},
+        }
+        with patch.object(bot_telegram, "_rango_torneo_hoy",
+                          return_value=("2026-11-19", "2026-11-20")):
+            rows = bot_telegram._torneos_por_estado(tournaments, {"live", "upcoming"})
+        self.assertEqual([tid for tid, _ in rows], ["today"])
+
+    def test_pagination_url_keeps_requested_date_range(self):
+        url = "https://tt.league-pro.com/en/tournaments?page=2&status=2"
+        filtered = tablas_scraper._aplicar_filtro_fecha(
+            url, "2026-11-19", "2026-11-20"
+        )
+        self.assertIn("page=2", filtered)
+        self.assertIn("date_from=2026-11-19", filtered)
+        self.assertIn("date_to=2026-11-20", filtered)
 
     def test_text_is_limited(self):
         text = bot_telegram._texto_telegram("linea\n" * 1000)
