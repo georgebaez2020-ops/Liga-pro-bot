@@ -487,7 +487,21 @@ def parsear_detalle_oficial(texto, grupo):
                     break
             if marcador_live_tokens:
                 marcador_live_texto = " ".join(marcador_live_tokens)
+                # En la ficha oficial del torneo, LIVE muestra los sets ganados
+                # como dos celdas numéricas independientes (p. ej. "1" y "0").
+                # Solo se acepta exactamente esa pareja y dentro del formato
+                # al mejor de cinco; secuencias más largas pueden ser puntos
+                # del set y se conservan como texto sin interpretarlas.
+                if (
+                    len(marcador_live_tokens) == 2
+                    and all(re.fullmatch(r"[0-3]", token) for token in marcador_live_tokens)
+                ):
+                    marcador_live_sets = f"{marcador_live_tokens[0]}:{marcador_live_tokens[1]}"
+                else:
+                    marcador_live_sets = None
                 next_i = k
+            else:
+                marcador_live_sets = None
         matches.append({
             "orden": len(matches) + 1, "hora": hour, "estado": status,
             "jugador_a": jugador_a, "jugador_b": jugador_b,
@@ -495,6 +509,7 @@ def parsear_detalle_oficial(texto, grupo):
             "marcador_sets": score, "marcador_marca": " ".join(markers) if status == "finished" and markers else None,
             "marcador_live_tokens": marcador_live_tokens,
             "marcador_live_texto": marcador_live_texto,
+            "marcador_live_sets": marcador_live_sets if status == "live" else None,
             "puntos_sets_a": puntos_sets_a, "puntos_sets_b": puntos_sets_b,
             "puntos_juego_a": sum(puntos_sets_a) if puntos_sets_a else None,
             "puntos_juego_b": sum(puntos_sets_b) if puntos_sets_b else None,
