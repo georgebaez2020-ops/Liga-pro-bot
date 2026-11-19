@@ -223,6 +223,7 @@ async def descubrir(page, dia_col, estados_solicitados):
     pendientes = [primera]
     visitadas = set()
     encontrados = {}
+    filas_diagnostico = []
 
     while pendientes and len(visitadas) < MAX_PAGINAS:
         url = _aplicar_filtro_fecha(pendientes.pop(0), fecha_desde, fecha_hasta)
@@ -234,10 +235,8 @@ async def descubrir(page, dia_col, estados_solicitados):
         await page.wait_for_timeout(1200)
 
         filas = await page.evaluate(JS_TORNEOS)
-        # Diagnóstico temporal: estructura real de tarjetas y etiquetas visibles.
-        os.makedirs(SALIDA, exist_ok=True)
-        with open(f"{SALIDA}/debug_listado.json", "w", encoding="utf-8") as debug_file:
-            json.dump(filas, debug_file, ensure_ascii=False, indent=2)
+        # Acumulamos el diagnóstico de todas las páginas; no sobrescribir la anterior.
+        filas_diagnostico.extend(filas)
         for item in filas:
             href = item.get("href", "")
             match = re.search(r"/en/tournaments/(\d+)", href)
@@ -266,6 +265,9 @@ async def descubrir(page, dia_col, estados_solicitados):
             if siguiente not in visitadas and siguiente not in pendientes:
                 pendientes.append(siguiente)
 
+    os.makedirs(SALIDA, exist_ok=True)
+    with open(f"{SALIDA}/debug_listado.json", "w", encoding="utf-8") as debug_file:
+        json.dump(filas_diagnostico, debug_file, ensure_ascii=False, indent=2)
     return list(encontrados.values())
 
 
@@ -430,6 +432,22 @@ async def main():
             lista = await descubrir(page, dia, estados)
             print(f"Torneos identificados en el listado: {len(lista)}")
 
+        # Procesar primero torneos activos o próximos para que el límite de
+        # memoria no deje fuera los eventos de mayor interés operativo.
+        prioridad_estado = {"live": 0, "upcoming": 1, "unknown": 2, "finished": 3}
+        lista = sorted(
+            enumerate(lista),
+            key=lambda par: (prioridad_estado.get(str(par[1].get("estado", "unknown")).lower(), 2), par[0]),
+        )
+        lista = [torneo for _, torneo in lista]
+        if len(lista) > MAX_TORNEOS:
+            omitidos = lista[MAX_TORNEOS:]
+            print(
+                f"Se procesarán {MAX_TORNEOS} de {len(lista)} torneos; "
+                f"quedan pendientes: " + ", ".join(
+                    f'{x.get("id")}({x.get("estado", "unknown")})' for x in omitidos
+                )
+            )
         for torneo in lista[:MAX_TORNEOS]:
             tid = torneo["id"]
             try:
