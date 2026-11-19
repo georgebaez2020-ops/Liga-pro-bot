@@ -30,13 +30,71 @@ def _torneos_por_estado(tournaments, wanted):
 def _formatear_torneos(tournaments, wanted, heading):
     rows = _torneos_por_estado(tournaments, wanted)
     if not rows:
-        return heading + "\nNo hay torneos en esta categoría en la última actualización."
+        return heading + "\\nNo hay torneos en esta categoría en la última actualización."
     lines = [heading, f"Total: {len(rows)}"]
     for tid, data in sorted(rows, key=lambda item: (str(item[1].get("fecha_torneo") or ""), item[0])):
         status = str(data.get("estado") or "unknown").upper()
         date = data.get("fecha_torneo") or "fecha no publicada"
-        lines.append(f"\n🏓 Torneo #{tid} — {status}\nFecha: {date}\nTabla: /tabla {tid}\nhttps://tt.league-pro.com/en/tournaments/{tid}")
-    return "\n".join(lines)
+        lines.append(f"\\n🏓 Torneo #{tid} — {status}\\nFecha: {date}")
+        groups = data.get("grupos") or []
+        analyses = data.get("analisis_cronologico") or []
+        if groups:
+            for number, group in enumerate(groups, 1):
+                lines.append(f"\\n📋 Grupo {number}")
+                official = _tabla_oficial_grupo_texto(group)
+                if official:
+                    lines.append(official)
+                else:
+                    analysis = next((a for a in analyses if str(a.get("grupo")) == str(number)), None)
+                    lines.append(_tabla_grupo_texto(analysis) if analysis else "Tabla aún no publicada.")
+        elif analyses:
+            for analysis in analyses:
+                lines.append(f"\\n📋 Grupo {analysis.get('grupo', '?')}")
+                lines.append(_tabla_grupo_texto(analysis))
+        else:
+            lines.append("Tabla aún no disponible en la ficha oficial.")
+        lines.append(f"Detalle: /torneo {tid} | https://tt.league-pro.com/en/tournaments/{tid}")
+    return "\\n".join(lines)
+
+
+def _vista_torneos(chat_id, message_id, wanted, heading, text):
+    return {"chat_id": chat_id, "message_id": message_id, "wanted": set(wanted),
+            "heading": heading, "last_text": text}
+
+
+async def _actualizar_vistas_torneos(app):
+    views = app.bot_data.get("vistas_torneos", {})
+    if not views:
+        return
+    try:
+        _, _, tournaments = cargar_estado()
+    except Exception:
+        logging.exception("No se pudieron cargar tablas para actualizar vistas.")
+        return
+    for chat_id, view in list(views.items()):
+        text = _formatear_torneos(tournaments, view["wanted"], view["heading"])
+        if text == view.get("last_text"):
+            continue
+        try:
+            await app.bot.edit_message_text(
+                chat_id=chat_id, message_id=view["message_id"], text=text[:3900]
+            )
+            view["last_text"] = text
+        except Exception as exc:
+            # Si el usuario borró el mensaje o Telegram ya no permite editarlo,
+            # dejamos de intentar actualizar esa vista.
+            logging.info("Se cierra vista dinámica de %s: %s", chat_id, exc)
+            views.pop(chat_id, None)
+
+
+async def _enviar_vista_torneos(update, context, wanted, heading):
+    _, _, tournaments = cargar_estado()
+    text = _formatear_torneos(tournaments, wanted, heading)
+    message = await update.effective_message.reply_text(text[:3900])
+    views = context.application.bot_data.setdefault("vistas_torneos", {})
+    views[update.effective_chat.id] = _vista_torneos(
+        update.effective_chat.id, message.message_id, wanted, heading, text
+    )
 
 
 
@@ -114,29 +172,26 @@ async def calendario(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def torneos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        _, _, tournaments = cargar_estado()
-        await _reply(update, _formatear_torneos(tournaments, {"live", "upcoming"}, "🏓 TORNEOS LIVE Y PRÓXIMOS"))
+        await _enviar_vista_torneos(update, context, {"live", "upcoming"}, "🏓 TORNEOS LIVE Y PRÓXIMOS")
     except Exception as exc:
-        logging.exception("Error en /torneos")
+        logging.exception("Error consultando torneos")
         await _reply(update, f"Error consultando torneos: {type(exc).__name__}: {exc}")
 
 
 async def vivo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        _, _, tournaments = cargar_estado()
-        await _reply(update, _formatear_torneos(tournaments, {"live"}, "🔴 TORNEOS EN VIVO"))
+        await _enviar_vista_torneos(update, context, {"live"}, "🔴 TORNEOS EN VIVO")
     except Exception as exc:
-        logging.exception("Error en /vivo")
-        await _reply(update, f"Error consultando torneos en vivo: {type(exc).__name__}: {exc}")
+        logging.exception("Error consultando vivo")
+        await _reply(update, f"Error consultando torneos: {type(exc).__name__}: {exc}")
 
 
 async def proximos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        _, _, tournaments = cargar_estado()
-        await _reply(update, _formatear_torneos(tournaments, {"upcoming"}, "🗓️ PRÓXIMOS TORNEOS"))
+        await _enviar_vista_torneos(update, context, {"upcoming"}, "🗓️ PRÓXIMOS TORNEOS")
     except Exception as exc:
-        logging.exception("Error en /proximos")
-        await _reply(update, f"Error consultando próximos torneos: {type(exc).__name__}: {exc}")
+        logging.exception("Error consultando proximos")
+        await _reply(update, f"Error consultando torneos: {type(exc).__name__}: {exc}")
 
 
 def _tabla_grupo_texto(analisis):
@@ -500,6 +555,7 @@ async def scrape_job(context: ContextTypes.DEFAULT_TYPE):
                 logging.error("Scraper terminó con código %s:\n%s", process.returncode, tail)
             else:
                 logging.info("Scraper actualizado correctamente:\n%s", tail)
+                await _actualizar_vistas_torneos(context.application)
                 try:
                     from servicio_pronosticos import analizar_calendario
                     result = analizar_calendario()
