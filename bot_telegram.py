@@ -31,13 +31,27 @@ def _rango_torneo_hoy():
     return inicio.isoformat(), fin.isoformat()
 
 
+def _torneo_es_del_dia_colombia(data, fecha_desde, fecha_hasta):
+    hoy_colombia = datetime.now(ZoneInfo("America/Bogota")).date().isoformat()
+    fechas_partidos = {
+        str(partido.get("fecha_colombia"))
+        for partido in data.get("partidos", [])
+        if partido.get("fecha_colombia")
+    }
+    # Los horarios de partido ya fueron convertidos desde Europe/Prague.
+    # Si existen, son más precisos que la fecha civil publicada del torneo.
+    if fechas_partidos:
+        return hoy_colombia in fechas_partidos
+    fecha_oficial = str(data.get("fecha_torneo") or "")
+    return bool(fecha_oficial and fecha_desde <= fecha_oficial <= fecha_hasta)
+
+
 def _torneos_por_estado(tournaments, wanted):
     fecha_desde, fecha_hasta = _rango_torneo_hoy()
     return [
         (str(tid), data) for tid, data in tournaments.items()
         if str(data.get("estado") or "unknown").casefold() in wanted
-        and data.get("fecha_torneo")
-        and fecha_desde <= str(data.get("fecha_torneo")) <= fecha_hasta
+        and _torneo_es_del_dia_colombia(data, fecha_desde, fecha_hasta)
     ]
 
 
