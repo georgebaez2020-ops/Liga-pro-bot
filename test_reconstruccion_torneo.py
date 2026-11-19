@@ -420,9 +420,9 @@ Player D
     def test_live_match_page_score_is_mapped_to_tournament_player_order(self):
         from tablas_scraper import _marcador_en_ficha_partido
         # Formato observado en la ficha oficial: rating delante y detrás del nombre.
-        text = "Match\\n#847 Smrcek Milan\\n0:1\\nVarcl Jan #950\\n"
+        text = "Match\n#847 Smrcek Milan\n0:1\nVarcl Jan #950\n"
         self.assertEqual(_marcador_en_ficha_partido(text, "Smrcek Milan", "Varcl Jan"), "0:1")
-        reversed_text = "Match\\nVarcl Jan #950\\n1:0\\n#847 Smrcek Milan\\n"
+        reversed_text = "Match\nVarcl Jan #950\n1:0\n#847 Smrcek Milan\n"
         self.assertEqual(_marcador_en_ficha_partido(reversed_text, "Smrcek Milan", "Varcl Jan"), "0:1")
 
     def test_live_match_page_ignores_current_game_points_and_ambiguous_names(self):
