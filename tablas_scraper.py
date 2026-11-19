@@ -251,6 +251,49 @@ async def extraer(page, torneo):
     }
 
 
+async def extraer_torneos_bajo_demanda(estados_solicitados=None, max_torneos=30):
+    """Consulta la página oficial ahora mismo y devuelve torneos live/upcoming."""
+    dia = datetime.now(COL).strftime("%Y-%m-%d")
+    estados = set(estados_solicitados or {"live", "upcoming"})
+    estados.intersection_update({"live", "upcoming"})
+    resultado = {
+        "generado": datetime.now(COL).isoformat(timespec="seconds"),
+        "zona_horaria": "America/Bogota",
+        "dia_colombia": dia,
+        "filtro_estados": sorted(estados),
+        "torneos": {},
+        "resumen": {"live": 0, "upcoming": 0, "finished": 0, "unknown": 0},
+    }
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(
+            headless=True,
+            args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
+        )
+        try:
+            page = await browser.new_page()
+            lista = await descubrir(page, dia, estados)
+            # No presentamos estados ambiguos como si fueran live o upcoming.
+            lista = [item for item in lista if item.get("estado") in estados]
+            for torneo in lista[:max_torneos]:
+                try:
+                    dato = await extraer(page, torneo)
+                    resultado["torneos"][torneo["id"]] = dato
+                    resultado["resumen"][dato["estado"]] += 1
+                except Exception as exc:
+                    resultado["torneos"][torneo["id"]] = {
+                        **torneo, "grupos": [],
+                        "error": f"{type(exc).__name__}: {str(exc)[:250]}",
+                    }
+                    resultado["resumen"][torneo["estado"]] += 1
+        finally:
+            await browser.close()
+
+    integrar_inteligencia_en_resultado(resultado)
+    # La consulta también conserva una captura para alimentar el histórico.
+    HistoryDB().save_scrape(resultado)
+    return resultado
+
+
 def estados_configurados():
     raw = os.getenv("STATUS", "all").strip().lower()
     if raw in ("", "all", "todos"):
