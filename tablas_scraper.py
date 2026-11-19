@@ -407,12 +407,19 @@ async def main():
             tid = torneo["id"]
             try:
                 dato = await extraer(page, torneo)
-                # El estado del listado puede ser demasiado amplio (por ejemplo,
-                # una tarjeta dentro del bloque de partidos LIVE). La ficha de
-                # cada torneo es la fuente de verdad para su estado real.
-                dato["estado"] = clasificar_estado_partidos(
-                    dato.get("partidos", []), dato.get("estado", "unknown")
-                )
+                # La categoría seleccionada en el listado oficial (LIVE,
+                # UPCOMING o FINISHED) es la fuente de verdad del torneo.
+                # El estado de los partidos de grupo NO debe reemplazarla:
+                # un grupo puede haber acabado y el torneo seguir en curso.
+                estado_oficial = str(torneo.get("estado") or "unknown").casefold()
+                if estado_oficial in ESTADOS:
+                    dato["estado"] = estado_oficial
+                else:
+                    # Solo si el listado no permitió leer la categoría,
+                    # usamos el calendario de la ficha como respaldo.
+                    dato["estado"] = clasificar_estado_partidos(
+                        dato.get("partidos", []), "unknown"
+                    )
                 fecha_oficial = dato.get("fecha_torneo")
                 fecha_desde, fecha_hasta = rango_fechas_praga(dia)
                 fechas_partidos_col = {
