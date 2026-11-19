@@ -1,8 +1,12 @@
 """Servicio de lectura, análisis y liquidación para el bot de Telegram."""
 from __future__ import annotations
 
+import json
+import logging
+import os
 from collections import defaultdict
 from datetime import datetime, timezone
+from pathlib import Path
 
 from db import HistoryDB
 from historial_rendimiento import acumular_historial_presion
@@ -13,18 +17,32 @@ from retroalimentacion import PredictionFeedback
 
 
 def cargar_estado(db=None):
+    """Lee los datos actuales del último scrape oficial; la DB aporta solo histórico."""
     db = db or HistoryDB()
     snapshots = db.listar_snapshots()
-    latest = {}
-    for snap in snapshots:
-        tid = str(snap.get("tournament_id") or "")
-        if tid:
-            latest[tid] = snap
+    current_path = Path(os.getenv("CURRENT_DATA_FILE", "salida/tablas.json"))
     tournaments = {}
-    for tid, snap in latest.items():
-        payload = snap.get("payload") or {}
-        tournament = payload.get("torneo") if isinstance(payload.get("torneo"), dict) else payload
-        tournaments[tid] = tournament
+    try:
+        with current_path.open(encoding="utf-8") as source:
+            current = json.load(source)
+        raw_tournaments = current.get("torneos", {})
+        if isinstance(raw_tournaments, dict):
+            tournaments = {
+                str(tid): tournament
+                for tid, tournament in raw_tournaments.items()
+                if isinstance(tournament, dict)
+            }
+        logging.info(
+            "Datos actuales oficiales cargados desde %s: %s torneos.",
+            current_path, len(tournaments),
+        )
+    except FileNotFoundError:
+        logging.warning(
+            "Aún no existe %s; no se sustituye la fuente oficial por datos antiguos de la DB.",
+            current_path,
+        )
+    except (OSError, json.JSONDecodeError) as exc:
+        logging.exception("No se pudo leer el último scrape oficial (%s).", exc)
     return db, snapshots, tournaments
 
 
