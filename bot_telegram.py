@@ -64,24 +64,16 @@ def _formatear_torneos(tournaments, wanted, heading):
         status = str(data.get("estado") or "unknown").upper()
         date = data.get("fecha_torneo") or "fecha no publicada"
         lines.append(f"\n🏓 Torneo #{tid} — {status}\nFecha: {date}")
-        groups = data.get("grupos") or []
-        analyses = data.get("analisis_cronologico") or []
-        if groups:
-            for number, group in enumerate(groups, 1):
-                lines.append(f"\n📋 Grupo {number}")
-                official = _tabla_oficial_grupo_texto(group)
-                if official:
-                    lines.append(official)
-                else:
-                    analysis = next((a for a in analyses if str(a.get("grupo")) == str(number)), None)
-                    lines.append(_tabla_grupo_texto(analysis) if analysis else "Tabla aún no publicada.")
-        elif analyses:
-            for analysis in analyses:
-                lines.append(f"\n📋 Grupo {analysis.get('grupo', '?')}")
-                lines.append(_tabla_grupo_texto(analysis))
-        else:
-            lines.append("Tabla aún no disponible en la ficha oficial.")
-        lines.append(f"Detalle: /torneo {tid} | https://tt.league-pro.com/en/tournaments/{tid}")
+        matches = data.get("partidos") or []
+        live_count = sum(1 for match in matches if match.get("estado") == "live")
+        upcoming_count = sum(1 for match in matches if match.get("estado") in {"planned", "upcoming"})
+        finished_count = sum(1 for match in matches if match.get("estado") == "finished")
+        lines.append(
+            f"Partidos: 🔴 {live_count} en vivo | ⏳ {upcoming_count} pendientes | "
+            f"✅ {finished_count} finalizados"
+        )
+        lines.append(f"Detalle: /torneo {tid} | Tabla: /tabla {tid}")
+        lines.append(f"Ficha oficial: https://tt.league-pro.com/en/tournaments/{tid}")
     return "\n".join(lines)
 
 
@@ -212,7 +204,7 @@ async def calendario(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def torneos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        await _enviar_vista_torneos(update, context, {"live", "upcoming"}, "🏓 TORNEOS LIVE Y PRÓXIMOS")
+        await _enviar_vista_torneos(update, context, {"live", "upcoming", "finished"}, "🏓 TODOS LOS TORNEOS DEL DÍA")
     except Exception as exc:
         logging.exception("Error consultando torneos")
         await _reply(update, f"Error consultando torneos: {type(exc).__name__}: {exc}")
@@ -231,6 +223,16 @@ async def proximos(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await _enviar_vista_torneos(update, context, {"upcoming"}, "🗓️ PRÓXIMOS TORNEOS")
     except Exception as exc:
         logging.exception("Error consultando proximos")
+        await _reply(update, f"Error consultando torneos: {type(exc).__name__}: {exc}")
+
+
+async def finalizados(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        await _enviar_vista_torneos(
+            update, context, {"finished"}, "✅ TORNEOS FINALIZADOS"
+        )
+    except Exception as exc:
+        logging.exception("Error consultando finalizados")
         await _reply(update, f"Error consultando torneos: {type(exc).__name__}: {exc}")
 
 
@@ -642,6 +644,7 @@ def main():
     app.add_handler(CommandHandler("torneos", torneos))
     app.add_handler(CommandHandler("vivo", vivo))
     app.add_handler(CommandHandler("proximos", proximos))
+    app.add_handler(CommandHandler("finalizados", finalizados))
     app.add_handler(CommandHandler("torneo", torneo))
     app.add_handler(CommandHandler("tabla", tabla))
     app.add_handler(CommandHandler("pronosticos", pronosticos))
