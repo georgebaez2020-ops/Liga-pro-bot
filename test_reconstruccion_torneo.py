@@ -381,8 +381,37 @@ Player D
         parsed = parsear_detalle_oficial(page_text, group)
         self.assertEqual(parsed["partidos"][0]["estado"], "live")
         self.assertIsNone(parsed["partidos"][0]["marcador_sets"])
+        self.assertEqual(parsed["partidos"][0]["marcador_live_sets"], "1:2")
+        self.assertEqual(parsed["partidos"][0]["marcador_live_texto"], "1 2")
         self.assertEqual(parsed["partidos"][1]["estado"], "planned")
         self.assertIsNone(parsed["partidos"][1]["marcador_sets"])
+        self.assertIsNone(parsed["partidos"][1]["marcador_live_sets"])
+
+    def test_live_tournament_card_does_not_guess_when_more_than_two_numbers_are_visible(self):
+        group = [{"jugador": "A", "rating": "384"}, {"jugador": "B", "rating": "366"},
+                 {"jugador": "C", "rating": "313"}, {"jugador": "D", "rating": "409"}]
+        page_text = """Tournament games
+Group
+LIVE
+08:00
+(384)
+Player A
+(366)
+Player B
+11
+7
+1
+2
+PLANNED
+08:30
+(313)
+Player C
+(409)
+Player D
+"""
+        parsed = parsear_detalle_oficial(page_text, group)
+        self.assertEqual(parsed["partidos"][0]["marcador_live_texto"], "11 7 1 2")
+        self.assertIsNone(parsed["partidos"][0]["marcador_live_sets"])
 
     def test_consolidates_official_schedule_for_prediction_engine(self):
         analyses = [{
