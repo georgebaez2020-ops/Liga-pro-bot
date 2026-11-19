@@ -185,9 +185,10 @@ def acumular_historial_presion_reconstruido(snapshots):
         "grupos_con_reconstruccion_completa": 0,
         "grupos_incompletos_omitidos": 0,
         "partidos_reconstruidos": 0,
-        "partidos_obligado_a_ganar": 0,
-        "partidos_sin_necesidad_estricta": 0,
+        "jugadores_obligados_a_ganar": 0,
+        "jugadores_sin_necesidad_estricta": 0,
     }
+    incomplete_groups = set()
     for snapshot in ordered:
         tid = str(snapshot.get("tournament_id") or "")
         payload = snapshot.get("payload") or {}
@@ -198,8 +199,9 @@ def acumular_historial_presion_reconstruido(snapshots):
             key = (tid, str(group_no))
             if reconstruction.get("completa"):
                 selected[key] = (tid, group_no, reconstruction)
-            elif key not in selected:
-                summary["grupos_incompletos_omitidos"] += 1
+            else:
+                incomplete_groups.add(key)
+    summary["grupos_incompletos_omitidos"] = len(incomplete_groups - set(selected))
 
     players = defaultdict(lambda: {
         "jugador": "", "partidos_relevantes": 0, "victorias": 0,
@@ -214,9 +216,9 @@ def acumular_historial_presion_reconstruido(snapshots):
             outcomes = match.get("cumplio_necesidad") or {}
             for name, detail in needs.items():
                 if not detail.get("debe_ganar_por_puntos_para_seguir_en_fase"):
-                    summary["partidos_sin_necesidad_estricta"] += 1
+                    summary["jugadores_sin_necesidad_estricta"] += 1
                     continue
-                summary["partidos_obligado_a_ganar"] += 1
+                summary["jugadores_obligados_a_ganar"] += 1
                 outcome = outcomes.get(name)
                 # None indica que no se clasificó como obligación estricta.
                 if outcome is None:
@@ -255,7 +257,7 @@ def acumular_historial_presion_reconstruido(snapshots):
 def acumular_historial_presion(snapshots):
     """Prefiere la reconstrucción cronológica completa; conserva fallback legacy."""
     reconstructed = acumular_historial_presion_reconstruido(snapshots)
-    if reconstructed["resumen"]["partidos_obligado_a_ganar"] > 0:
+    if reconstructed["resumen"]["jugadores_obligados_a_ganar"] > 0:
         return reconstructed
     return _acumular_historial_presion_snapshots(snapshots)
 
