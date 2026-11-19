@@ -379,7 +379,15 @@ def parsear_detalle_oficial(texto, grupo):
     stage = "group"
     i = start
     while i < len(lines):
-        marker = lines[i].casefold()
+        marker_raw = lines[i].casefold().strip()
+        # La web puede entregar el texto traducido por el navegador o en español.
+        status_aliases = {
+            "finished": "finished", "finalizado": "finished", "finalizada": "finished",
+            "live": "live", "en vivo": "live", "en directo": "live",
+            "planned": "planned", "planificado": "planned", "planificada": "planned",
+            "upcoming": "upcoming", "próximamente": "upcoming", "proximamente": "upcoming",
+        }
+        marker = status_aliases.get(marker_raw, marker_raw)
         if marker == "for 3rd place":
             stage = "third_place"
             i += 1
