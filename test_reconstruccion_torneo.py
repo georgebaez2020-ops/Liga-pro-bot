@@ -358,6 +358,14 @@ Stefek M
         self.assertEqual(parsed["partidos"][0]["jugador_b"], "Stefek Martin")
         self.assertEqual(parsed["rating_por_jugador"]["Picek Petr"]["rating_final"], 614)
 
+    def test_parses_only_unambiguous_live_set_score(self):
+        from reconstruccion_torneo import parsear_marcador_sets_live
+        self.assertEqual(parsear_marcador_sets_live("Match\nLive\nPlayer A\n1:2\nPlayer B"), "1:2")
+        self.assertEqual(parsear_marcador_sets_live("Match\nLive\n0:0\nPlayer A"), "0:0")
+        self.assertIsNone(parsear_marcador_sets_live("Live\n1:2\nCurrent matches\n0:1"))
+        self.assertIsNone(parsear_marcador_sets_live("Live\nDuration: 0 min"))
+
+
     def test_live_partial_score_is_not_treated_as_finished(self):
         group = [{"jugador": "A", "rating": "384"}, {"jugador": "B", "rating": "366"},
                  {"jugador": "C", "rating": "313"}, {"jugador": "D", "rating": "409"}]
@@ -408,6 +416,63 @@ Player D
         ])
         self.assertEqual(len(result["partidos_programados"]), 1)
         self.assertIsNone(result["partidos_programados"][0]["grupo"])
+
+
+
+
+    def test_live_match_sheet_resolves_abbreviated_player_names(self):
+        from tablas_scraper import _marcador_en_ficha_partido
+        page_text = """Match
+Franek T
+1:2
+Skakal M
+"""
+        self.assertEqual(
+            _marcador_en_ficha_partido(page_text, "Franek Tomas", "Skakal Martin"),
+            "1:2",
+        )
+
+    def test_live_match_sheet_reverses_score_when_player_order_is_reversed(self):
+        from tablas_scraper import _marcador_en_ficha_partido
+        page_text = """Match
+Skakal M
+2:1
+Franek T
+"""
+        self.assertEqual(
+            _marcador_en_ficha_partido(page_text, "Franek Tomas", "Skakal Martin"),
+            "1:2",
+        )
+
+
+    def test_live_match_sheet_reads_set_score_not_current_game_points(self):
+        from tablas_scraper import _marcador_en_ficha_partido
+        # Formato observado en la ficha oficial: marcador del partido 1:0;
+        # debajo aparecen puntos del set actual (11:7 / 1:3), que no son sets.
+        page_text = """Torneo A12
+Volf Matej
+EN VIVO
+1:0
+11:7 / 1:3
+Dedek Jiri
+Estadisticas
+Hojas de partido
+"""
+        self.assertEqual(
+            _marcador_en_ficha_partido(page_text, "Volf Matej", "Dedek Jiri"),
+            "1:0",
+        )
+
+    def test_live_match_sheet_rejects_ambiguous_abbreviated_names(self):
+        from tablas_scraper import _marcador_en_ficha_partido
+        page_text = """Match
+Hrabec J
+1:2
+Hrabec Jan
+"""
+        self.assertIsNone(
+            _marcador_en_ficha_partido(page_text, "Hrabec Jan", "Hrabec Jiri")
+        )
 
 
 if __name__ == "__main__":
