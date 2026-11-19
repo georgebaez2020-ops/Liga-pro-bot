@@ -411,6 +411,14 @@ async def main():
             args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
         )
         page = await browser.new_page()
+        # Reduce el consumo de RAM en Render: el scraper solo necesita HTML/texto
+        # y las respuestas de red; no necesita descargar imágenes, fuentes ni video.
+        async def bloquear_recursos_pesados(route):
+            if route.request.resource_type in {"image", "media", "font"}:
+                await route.abort()
+            else:
+                await route.continue_()
+        await page.route("**/*", bloquear_recursos_pesados)
 
         if torneos_manual:
             lista = [
