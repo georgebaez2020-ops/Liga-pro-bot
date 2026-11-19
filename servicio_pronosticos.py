@@ -205,7 +205,7 @@ def formatear_tablas_torneos(resultado):
 
     for tid, torneo in live_tournaments.items():
         lines.append(
-            f"\\n🏓 TORNEO {tid} — LIVE — "
+            f"\n🏓 TORNEO {tid} — LIVE — "
             f"{torneo.get('fecha_torneo') or 'fecha no publicada'}"
         )
         groups = (torneo.get("inteligencia") or {}).get("grupos") or []
@@ -220,7 +220,7 @@ def formatear_tablas_torneos(resultado):
             for group in groups:
                 state = str(group.get("estado_clasificacion") or "provisional").upper()
                 group_no = group.get("grupo", "?")
-                lines.append(f"\\nGRUPO {group_no} — {state}")
+                lines.append(f"\nGRUPO {group_no} — {state}")
                 lines.append("Pos | Jugador | PJ | PG | PP | Pts")
                 for row in group.get("clasificacion") or []:
                     lines.append(
@@ -238,7 +238,7 @@ def formatear_tablas_torneos(resultado):
             if game.get("fase") == "group"
         ]
         if finished:
-            lines.append("\\nRESULTADOS FINALIZADOS")
+            lines.append("\nRESULTADOS FINALIZADOS")
             for game in finished:
                 score = game.get("marcador_sets") or "marcador no publicado"
                 lines.append(
@@ -246,7 +246,7 @@ def formatear_tablas_torneos(resultado):
                     f"{game.get('jugador_a', '?')} {score} {game.get('jugador_b', '?')}"
                 )
         if live:
-            lines.append("\\nPARTIDOS EN JUEGO")
+            lines.append("\nPARTIDOS EN JUEGO")
             for game in live:
                 score = game.get("marcador_sets")
                 score_text = f" | Marcador: {score}" if score else " | marcador parcial no disponible en la lectura oficial"
@@ -255,7 +255,7 @@ def formatear_tablas_torneos(resultado):
                     f"{game.get('jugador_a', '?')} vs {game.get('jugador_b', '?')}{score_text}"
                 )
         if not finished and not live:
-            lines.append("\\nLa ficha no publica partidos de grupo finalizados ni en juego en esta consulta.")
+            lines.append("\nLa ficha no publica partidos de grupo finalizados ni en juego en esta consulta.")
 
         for group in groups:
             pending = group.get("partidos_pendientes") or []
@@ -265,6 +265,6 @@ def formatear_tablas_torneos(resultado):
             if inconsistent:
                 lines.append(f"Advertencia: {len(inconsistent)} marcadores inconsistentes.")
 
-    lines.append("\\nPJ: partidos jugados; PG: ganados; PP: perdidos; Pts: puntos de reglamento.")
+    lines.append("\nPJ: partidos jugados; PG: ganados; PP: perdidos; Pts: puntos de reglamento.")
     lines.append("Las posiciones son provisionales mientras haya partidos pendientes.")
-    return "\\n".join(lines)
+    return "\n".join(lines)
