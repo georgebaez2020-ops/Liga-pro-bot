@@ -16,7 +16,7 @@ class FakeApp:
     def __init__(self):
         self.bot_data = {"vistas_torneos": {123: {
             "chat_id": 123, "message_id": 456, "wanted": {"live"},
-            "heading": "EN VIVO", "last_text": "EN VIVO\nTotal: 1",
+            "heading": "EN VIVO", "last_text": "EN VIVO\nNo hay torneos en esta categoría en la última actualización.",
         }}}
         self.bot = FakeBot()
 
