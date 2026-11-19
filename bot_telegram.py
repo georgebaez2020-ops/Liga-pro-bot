@@ -291,7 +291,7 @@ async def tabla(update: Update, context: ContextTypes.DEFAULT_TYPE):
         analyses = tournament.get("analisis_cronologico") or []
         if groups:
             for number, group in enumerate(groups, 1):
-                lines.append(f"\\n📋 GRUPO {number} — TABLA OFICIAL")
+                lines.append(f"\n📋 GRUPO {number} — TABLA OFICIAL")
                 official_table = _tabla_oficial_grupo_texto(group)
                 if official_table:
                     lines.append(official_table)
@@ -306,11 +306,11 @@ async def tabla(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     )
         elif analyses:
             for analysis in analyses:
-                lines.append(f"\\n📋 GRUPO {analysis.get('grupo', '?')}")
+                lines.append(f"\n📋 GRUPO {analysis.get('grupo', '?')}")
                 lines.append(_tabla_grupo_texto(analysis))
         else:
             lines.append(
-                "\\nLa ficha oficial todavía no publica grupos ni una tabla de clasificación. "
+                "\nLa ficha oficial todavía no publica grupos ni una tabla de clasificación. "
                 "En los torneos próximos puede que la clasificación aún no esté disponible."
             )
 
