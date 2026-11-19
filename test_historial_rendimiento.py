@@ -1,6 +1,6 @@
 import unittest
 
-from historial_rendimiento import acumular_historial_presion
+from historial_rendimiento import acumular_historial_presion, acumular_historial_presion_reconstruido
 
 
 def grupo_vacio():
@@ -25,6 +25,44 @@ def snapshot(at, group, tid="T1"):
 
 
 class HistoricalPressureTests(unittest.TestCase):
+
+    def test_uses_complete_reconstruction_for_must_win_history(self):
+        sequence = [{
+            "jugador_a": "A", "jugador_b": "B", "ganador": "A",
+            "necesidad_antes": {
+                "A": {"debe_ganar_por_puntos_para_seguir_en_fase": True},
+                "B": {"debe_ganar_por_puntos_para_seguir_en_fase": False},
+            },
+            "cumplio_necesidad": {"A": True, "B": None},
+        }]
+        payload = {"analisis_cronologico": [{
+            "grupo": 1,
+            "reconstruccion": {"completa": True, "secuencia": sequence},
+        }]}
+        result = acumular_historial_presion_reconstruido([{
+            "tournament_id": "T9", "captured_at": "2026-11-18T08:00:00Z",
+            "payload": payload,
+        }])
+        self.assertEqual(result["resumen"]["partidos_obligado_a_ganar"], 1)
+        self.assertEqual(result["jugadores"][0]["jugador"], "A")
+        self.assertEqual(result["jugadores"][0]["victorias"], 1)
+        self.assertEqual(result["jugadores"][0]["tasa_victoria"], 1.0)
+
+    def test_ignores_incomplete_reconstruction(self):
+        payload = {"analisis_cronologico": [{
+            "grupo": 1,
+            "reconstruccion": {"completa": False, "secuencia": [{
+                "necesidad_antes": {"A": {"debe_ganar_por_puntos_para_seguir_en_fase": True}},
+                "cumplio_necesidad": {"A": True},
+            }]},
+        }]}
+        result = acumular_historial_presion_reconstruido([{
+            "tournament_id": "T10", "captured_at": "2026-11-18T08:00:00Z",
+            "payload": payload,
+        }])
+        self.assertEqual(result["jugadores"], [])
+        self.assertEqual(result["resumen"]["grupos_incompletos_omitidos"], 1)
+
     def test_counts_new_match_once_using_previous_snapshot_context(self):
         before = grupo_vacio()
         after = grupo_vacio()
