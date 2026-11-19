@@ -35,7 +35,7 @@ def _formatear_torneos(tournaments, wanted, heading):
     for tid, data in sorted(rows, key=lambda item: (str(item[1].get("fecha_torneo") or ""), item[0])):
         status = str(data.get("estado") or "unknown").upper()
         date = data.get("fecha_torneo") or "fecha no publicada"
-        lines.append(f"\n🏓 Torneo #{tid} — {status}\nFecha: {date}\nhttps://tt.league-pro.com/en/tournaments/{tid}")
+        lines.append(f"\n🏓 Torneo #{tid} — {status}\nFecha: {date}\nTabla: /tabla {tid}\nhttps://tt.league-pro.com/en/tournaments/{tid}")
     return "\n".join(lines)
 
 
@@ -215,9 +215,12 @@ def _detalle_torneo(tid, tournament):
 
 async def torneo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
-        await _reply(update, "Uso: /torneo ID\nEjemplo: /torneo 123456")
+        await _reply(update, "Uso: /torneo NUMERO\nEjemplo: /torneo 38185")
         return
     tid = context.args[0].strip().rstrip("/").split("/")[-1]
+    if not tid.isdigit():
+        await _reply(update, "El identificador debe ser numérico. Ejemplo: /torneo 38185")
+        return
     try:
         _, _, tournaments = cargar_estado()
         tournament = tournaments.get(tid)
