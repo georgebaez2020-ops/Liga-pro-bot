@@ -16,7 +16,7 @@ from servicio_pronosticos import (
 )
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
-SCRAPE_INTERVAL = max(300, int(os.getenv("SCRAPE_INTERVAL_SECONDS", "900")))
+SCRAPE_INTERVAL = max(60, int(os.getenv("SCRAPE_INTERVAL_SECONDS", "60")))
 _scrape_lock = asyncio.Lock()
 
 
@@ -57,9 +57,18 @@ def _formatear_torneos(tournaments, wanted, heading):
     return "\n".join(lines)
 
 
+def _texto_telegram(text, limit=3900):
+    """Mantiene una sola vista editable dentro del límite de Telegram."""
+    text = str(text)
+    if len(text) <= limit:
+        return text
+    suffix = "\n…Contenido recortado por el límite de Telegram. Usa /torneo NUMERO para ver el detalle."
+    return text[:limit - len(suffix)].rsplit("\n", 1)[0] + suffix
+
+
 def _vista_torneos(chat_id, message_id, wanted, heading, text):
     return {"chat_id": chat_id, "message_id": message_id, "wanted": set(wanted),
-            "heading": heading, "last_text": text}
+            "heading": heading, "last_text": _texto_telegram(text)}
 
 
 async def _actualizar_vistas_torneos(app):
@@ -72,12 +81,14 @@ async def _actualizar_vistas_torneos(app):
         logging.exception("No se pudieron cargar tablas para actualizar vistas.")
         return
     for chat_id, view in list(views.items()):
-        text = _formatear_torneos(tournaments, view["wanted"], view["heading"])
+        text = _texto_telegram(
+            _formatear_torneos(tournaments, view["wanted"], view["heading"])
+        )
         if text == view.get("last_text"):
             continue
         try:
             await app.bot.edit_message_text(
-                chat_id=chat_id, message_id=view["message_id"], text=text[:3900]
+                chat_id=chat_id, message_id=view["message_id"], text=text
             )
             view["last_text"] = text
         except Exception as exc:
@@ -90,7 +101,8 @@ async def _actualizar_vistas_torneos(app):
 async def _enviar_vista_torneos(update, context, wanted, heading):
     _, _, tournaments = cargar_estado()
     text = _formatear_torneos(tournaments, wanted, heading)
-    message = await update.effective_message.reply_text(text[:3900])
+    text = _texto_telegram(text)
+    message = await update.effective_message.reply_text(text)
     views = context.application.bot_data.setdefault("vistas_torneos", {})
     views[update.effective_chat.id] = _vista_torneos(
         update.effective_chat.id, message.message_id, wanted, heading, text
