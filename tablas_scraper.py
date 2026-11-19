@@ -12,7 +12,8 @@ from playwright.async_api import async_playwright
 from db import HistoryDB
 from inteligencia_torneo import integrar_inteligencia_en_resultado
 from reconstruccion_torneo import (
-    consolidar_partidos_torneo, parsear_detalle_oficial, parsear_marcador_sets_live, reconstruir_secuencia,
+    _nombre_ficha_coincide, consolidar_partidos_torneo, parsear_detalle_oficial,
+    parsear_marcador_sets_live, reconstruir_secuencia,
 )
 
 COL = ZoneInfo("America/Bogota")
@@ -57,31 +58,49 @@ JS_TORNEOS = r"""
 JS_ENLACES_PARTIDOS = r"""
 (tid) => Array.from(document.querySelectorAll('a[href*="/en/tournaments/"]'))
   .map(a => a.href)
-  .filter(href => new RegExp('/en/tournaments/' + tid + '/\\\\d+').test(href))
+  .filter(href => {
+    const parts = new URL(href).pathname.split('/').filter(Boolean);
+    return parts.length >= 4 &&
+      parts[0] === 'en' &&
+      parts[1] === 'tournaments' &&
+      parts[2] === String(tid) &&
+      parts[3].length > 0 &&
+      Array.from(parts[3]).every(ch => ch >= '0' && ch <= '9');
+  })
   .filter((href, index, all) => all.indexOf(href) === index)
 """
 
 
 def _marcador_en_ficha_partido(texto, jugador_a, jugador_b):
-    """Acepta el marcador solo si aparece entre ambos nombres en la ficha."""
-    import re
-
-    contenido = str(texto or "")
-    lower = contenido.casefold()
-    a = lower.find(str(jugador_a or "").casefold())
-    b = lower.find(str(jugador_b or "").casefold())
-    if a < 0 or b < 0 or a == b:
+    """Acepta el marcador entre los nombres oficiales, incluso si están abreviados."""
+    lineas = [line.strip() for line in str(texto or "").splitlines() if line.strip()]
+    coincidencias_a = [
+        i for i, linea in enumerate(lineas)
+        if _nombre_ficha_coincide(linea, str(jugador_a or ""))
+    ]
+    coincidencias_b = [
+        i for i, linea in enumerate(lineas)
+        if _nombre_ficha_coincide(linea, str(jugador_b or ""))
+    ]
+    # Si un nombre abreviado identifica a más de un jugador, no se adivina.
+    if len(coincidencias_a) != 1 or len(coincidencias_b) != 1:
         return None
-    for match in re.finditer(r"(?m)^\s*([0-3])\s*:\s*([0-3])\s*$", contenido):
-        if min(a, b) < match.start() < max(a, b):
-            score = parsear_marcador_sets_live(match.group(0))
-            if score:
-                if a < b:
-                    return score
-                left, right = score.split(":")
-                return f"{right}:{left}"
-    return None
-
+    a, b = coincidencias_a[0], coincidencias_b[0]
+    if a == b:
+        return None
+    inicio, fin = sorted((a, b))
+    marcadores = []
+    for linea in lineas[inicio + 1:fin]:
+        score = parsear_marcador_sets_live(linea)
+        if score:
+            marcadores.append(score)
+    if len(marcadores) != 1:
+        return None
+    score = marcadores[0]
+    if a < b:
+        return score
+    left, right = score.split(":")
+    return f"{right}:{left}"
 
 async def enriquecer_marcadores_live(page, torneo_id, partidos):
     """Lee fichas individuales oficiales y completa solo marcadores LIVE inequívocos."""
