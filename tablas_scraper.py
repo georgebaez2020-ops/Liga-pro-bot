@@ -12,7 +12,7 @@ from playwright.async_api import async_playwright
 from db import HistoryDB
 from inteligencia_torneo import integrar_inteligencia_en_resultado
 from reconstruccion_torneo import (
-    consolidar_partidos_torneo, parsear_detalle_oficial, reconstruir_secuencia,
+    consolidar_partidos_torneo, parsear_detalle_oficial, parsear_marcador_sets_live, reconstruir_secuencia,
 )
 
 COL = ZoneInfo("America/Bogota")
@@ -51,6 +51,69 @@ JS_TORNEOS = r"""
   };
 })
 """
+
+
+
+JS_ENLACES_PARTIDOS = r"""
+(tid) => Array.from(document.querySelectorAll('a[href*="/en/tournaments/"]'))
+  .map(a => a.href)
+  .filter(href => new RegExp('/en/tournaments/' + tid + '/\\\\d+').test(href))
+  .filter((href, index, all) => all.indexOf(href) === index)
+"""
+
+
+def _marcador_en_ficha_partido(texto, jugador_a, jugador_b):
+    """Acepta el marcador solo si aparece entre ambos nombres en la ficha."""
+    import re
+
+    contenido = str(texto or "")
+    lower = contenido.casefold()
+    a = lower.find(str(jugador_a or "").casefold())
+    b = lower.find(str(jugador_b or "").casefold())
+    if a < 0 or b < 0 or a == b:
+        return None
+    for match in re.finditer(r"(?m)^\\s*([0-3])\\s*:\\s*([0-3])\\s*$", contenido):
+        if min(a, b) < match.start() < max(a, b):
+            score = parsear_marcador_sets_live(match.group(0))
+            if score:
+                if a < b:
+                    return score
+                left, right = score.split(":")
+                return f"{right}:{left}"
+    return None
+
+
+async def enriquecer_marcadores_live(page, torneo_id, partidos):
+    """Lee fichas individuales oficiales y completa solo marcadores LIVE inequívocos."""
+    live = [
+        partido for partido in partidos
+        if partido.get("estado") == "live" and not partido.get("marcador_sets")
+    ]
+    if not live:
+        return {"consultados": 0, "actualizados": 0}
+
+    enlaces = await page.evaluate(JS_ENLACES_PARTIDOS, str(torneo_id))
+    actualizados = 0
+    consultados = 0
+    for href in enlaces:
+        try:
+            await page.goto(href, wait_until="domcontentloaded", timeout=30000)
+            texto = await page.locator("body").inner_text()
+            consultados += 1
+        except Exception:
+            continue
+        for partido in live:
+            if partido.get("marcador_sets"):
+                continue
+            score = _marcador_en_ficha_partido(
+                texto, partido.get("jugador_a"), partido.get("jugador_b")
+            )
+            if score:
+                partido["marcador_sets"] = score
+                partido["fuente_marcador_live"] = href
+                actualizados += 1
+                break
+    return {"consultados": consultados, "actualizados": actualizados}
 
 
 def url_lista(dia_col):
@@ -212,6 +275,13 @@ async def extraer(page, torneo):
             "reconstruccion": reconstruido,
             "advertencias_extraccion": extraido["advertencias"],
         })
+    partidos_live = list(partidos_ficha_sin_grupo)
+    for analisis in analisis_cronologico:
+        partidos_live.extend(
+            partido for partido in analisis.get("partidos_ficha", [])
+            if partido.get("fase") == "group"
+        )
+    await enriquecer_marcadores_live(page, tid, partidos_live)
     calendario = consolidar_partidos_torneo(analisis_cronologico, partidos_ficha_sin_grupo)
     # La fecha se toma de la ficha oficial; las horas de Tournament games
     # corresponden a la hora local de la competición (Praga).
