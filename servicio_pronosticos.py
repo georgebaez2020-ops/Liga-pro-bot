@@ -177,11 +177,14 @@ def buscar_jugador(nombre, db=None):
 
 def buscar_h2h(nombre_a, nombre_b, db=None):
     data = informes(db)
-    keys = {" ".join(nombre_a.split()).casefold(), " ".join(nombre_b.split()).casefold()}
-    if len(keys) != 2:
+    key_a = tuple(sorted(_normalizar_nombre_busqueda(nombre_a)))
+    key_b = tuple(sorted(_normalizar_nombre_busqueda(nombre_b)))
+    if not key_a or not key_b or key_a == key_b:
         return None
     for row in data["jugadores"]["h2h"]:
-        if {row["jugador_a"].casefold(), row["jugador_b"].casefold()} == keys:
+        row_a = tuple(sorted(_normalizar_nombre_busqueda(row.get("jugador_a"))))
+        row_b = tuple(sorted(_normalizar_nombre_busqueda(row.get("jugador_b"))))
+        if {row_a, row_b} == {key_a, key_b}:
             return row
     return None
 
