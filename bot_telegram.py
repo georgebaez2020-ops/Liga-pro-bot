@@ -40,10 +40,13 @@ def _torneo_es_del_dia_colombia(data, fecha_desde, fecha_hasta):
     }
     # Los horarios de partido ya fueron convertidos desde Europe/Prague.
     # Si existen, son más precisos que la fecha civil publicada del torneo.
-    if fechas_partidos:
-        return hoy_colombia in fechas_partidos
     fecha_oficial = str(data.get("fecha_torneo") or "")
-    return bool(fecha_oficial and fecha_desde <= fecha_oficial <= fecha_hasta)
+    # Acepta tanto la fecha de partido en Colombia como la fecha oficial
+    # de Praga que corresponde al rango horario del día colombiano.
+    return (
+        hoy_colombia in fechas_partidos
+        or bool(fecha_oficial and fecha_desde <= fecha_oficial <= fecha_hasta)
+    )
 
 
 def _torneos_por_estado(tournaments, wanted):
