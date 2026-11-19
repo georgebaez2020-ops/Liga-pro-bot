@@ -3,7 +3,7 @@ name: Telegram integration checks
 on:
   push:
     branches:
-      - integration/telegram-prediction-engine
+      - integration/telegram-prediction-engine\n      - feature/consulta-en-vivo-torneos-tablas
   pull_request:
     branches:
       - feature/status-upcoming-live-finished
