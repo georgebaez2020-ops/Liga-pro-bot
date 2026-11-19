@@ -13,6 +13,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes
 from servicio_pronosticos import (
     analizar_calendario, buscar_h2h, buscar_jugador, cargar_estado, informes,
     listar_calendario, buscar_necesidad, buscar_rendimiento,
+    consultar_torneos_oficiales, formatear_resumen_torneos, formatear_tablas_torneos,
 )
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
@@ -36,6 +37,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Comandos:\n"
         "/estado — estado de la memoria y torneos\n"
         "/calendario — partidos programados y en vivo\n"
+        "/torneos — torneos en vivo y por comenzar (consulta oficial)\n"
+        "/tablas — tablas y resultados de torneos en vivo\n"
         "/pronosticos — análisis conservador de próximos partidos\n"
         "/jugador NOMBRE — histórico de un jugador\n"
         "/necesidad NOMBRE — respuesta histórica cuando debía ganar\n"
@@ -84,6 +87,37 @@ async def calendario(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as exc:
         logging.exception("Error en /calendario")
         await _reply(update, f"Error consultando calendario: {type(exc).__name__}: {exc}")
+
+
+
+
+
+async def torneos(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if _scrape_lock.locked():
+        await _reply(update, "Ya hay una actualización oficial en curso. Intenta de nuevo en un momento.")
+        return
+    async with _scrape_lock:
+        await _reply(update, "🔎 Consultando ahora la página oficial de Czech Liga Pro...")
+        try:
+            result = await consultar_torneos_oficiales({"live", "upcoming"})
+            await _reply(update, formatear_resumen_torneos(result))
+        except Exception as exc:
+            logging.exception("Error consultando torneos oficiales")
+            await _reply(update, f"No pude consultar la página oficial: {type(exc).__name__}: {exc}")
+
+
+async def tablas(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if _scrape_lock.locked():
+        await _reply(update, "Ya hay una actualización oficial en curso. Intenta de nuevo en un momento.")
+        return
+    async with _scrape_lock:
+        await _reply(update, "🔎 Extrayendo torneos y calculando sus tablas desde la página oficial...")
+        try:
+            result = await consultar_torneos_oficiales({"live"})
+            await _reply(update, formatear_tablas_torneos(result))
+        except Exception as exc:
+            logging.exception("Error consultando tablas oficiales")
+            await _reply(update, f"No pude consultar las tablas oficiales: {type(exc).__name__}: {exc}")
 
 
 async def pronosticos(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -290,6 +324,8 @@ def main():
     app.add_handler(CommandHandler("test", test))
     app.add_handler(CommandHandler("estado", estado))
     app.add_handler(CommandHandler("calendario", calendario))
+    app.add_handler(CommandHandler("torneos", torneos))
+    app.add_handler(CommandHandler("tablas", tablas))
     app.add_handler(CommandHandler("pronosticos", pronosticos))
     app.add_handler(CommandHandler("jugador", jugador))
     app.add_handler(CommandHandler("necesidad", necesidad))

@@ -168,3 +168,103 @@ def buscar_rendimiento(nombre, db=None):
     needle = " ".join(str(nombre or "").split()).casefold()
     rows = [row for row in data if needle in row["jugador"].casefold()] if needle else []
     return rows[:5]
+
+
+
+async def consultar_torneos_oficiales(estados=None, max_torneos=30):
+    """Consulta en vivo la web oficial; no depende de la última captura guardada."""
+    from tablas_scraper import extraer_torneos_bajo_demanda
+    return await extraer_torneos_bajo_demanda(estados, max_torneos)
+
+
+def formatear_resumen_torneos(resultado):
+    lines = ["🏓 TORNEOS EN LA PÁGINA OFICIAL"]
+    tournaments = resultado.get("torneos") or {}
+    if not tournaments:
+        return "No encontré torneos en vivo o por comenzar en la fecha consultada."
+    for tid, torneo in tournaments.items():
+        state = str(torneo.get("estado") or "unknown").upper()
+        lines.append(
+            f"• ID {tid} | {state} | {torneo.get('fecha_torneo') or resultado.get('dia_colombia') or 'fecha no publicada'}"
+            f" | Grupos: {len(torneo.get('grupos') or [])}"
+        )
+    lines.append("\nConsulta de tablas: /tablas")
+    return "\n".join(lines)
+
+
+def formatear_tablas_torneos(resultado):
+    """Muestra únicamente torneos LIVE, sus tablas y resultados publicados."""
+    lines = ["📊 TABLAS Y RESULTADOS — TORNEOS EN VIVO"]
+    tournaments = resultado.get("torneos") or {}
+    live_tournaments = {
+        tid: torneo for tid, torneo in tournaments.items()
+        if str(torneo.get("estado") or "").casefold() == "live"
+    }
+    if not live_tournaments:
+        return "No hay torneos LIVE en la consulta oficial. Intenta de nuevo cuando comience un torneo."
+
+    for tid, torneo in live_tournaments.items():
+        lines.append(
+            f"\n🏓 TORNEO {tid} — LIVE — "
+            f"{torneo.get('fecha_torneo') or 'fecha no publicada'}"
+        )
+        groups = (torneo.get("inteligencia") or {}).get("grupos") or []
+        if not groups:
+            raw_groups = torneo.get("grupos") or []
+            if not raw_groups:
+                lines.append("La ficha oficial todavía no publica una tabla para este torneo.")
+                continue
+            for n, group in enumerate(raw_groups, 1):
+                lines.append(f"Grupo {n}: " + ", ".join(str(p.get("jugador") or "?") for p in group))
+        else:
+            for group in groups:
+                state = str(group.get("estado_clasificacion") or "provisional").upper()
+                group_no = group.get("grupo", "?")
+                lines.append(f"\nGRUPO {group_no} — {state}")
+                lines.append("Pos | Jugador | PJ | PG | PP | Pts")
+                for row in group.get("clasificacion") or []:
+                    lines.append(
+                        f"{row.get('puesto_grupo')} | {row.get('jugador')} | "
+                        f"{row.get('partidos')} | {row.get('victorias')} | "
+                        f"{row.get('derrotas')} | {row.get('puntos_reglamento')}"
+                    )
+
+        finished = [
+            game for game in torneo.get("partidos_finalizados") or []
+            if game.get("fase") == "group"
+        ]
+        live = [
+            game for game in torneo.get("partidos_en_vivo") or []
+            if game.get("fase") == "group"
+        ]
+        if finished:
+            lines.append("\nRESULTADOS FINALIZADOS")
+            for game in finished:
+                score = game.get("marcador_sets") or "marcador no publicado"
+                lines.append(
+                    f"Grupo {game.get('grupo') or '—'} | "
+                    f"{game.get('jugador_a', '?')} {score} {game.get('jugador_b', '?')}"
+                )
+        if live:
+            lines.append("\nPARTIDOS EN JUEGO")
+            for game in live:
+                score = game.get("marcador_sets")
+                score_text = f" | Marcador: {score}" if score else " | marcador parcial no disponible en la lectura oficial"
+                lines.append(
+                    f"Grupo {game.get('grupo') or '—'} | "
+                    f"{game.get('jugador_a', '?')} vs {game.get('jugador_b', '?')}{score_text}"
+                )
+        if not finished and not live:
+            lines.append("\nLa ficha no publica partidos de grupo finalizados ni en juego en esta consulta.")
+
+        for group in groups:
+            pending = group.get("partidos_pendientes") or []
+            if pending:
+                lines.append(f"Grupo {group.get('grupo', '?')} — pendientes: {len(pending)}")
+            inconsistent = group.get("marcadores_inconsistentes") or []
+            if inconsistent:
+                lines.append(f"Advertencia: {len(inconsistent)} marcadores inconsistentes.")
+
+    lines.append("\nPJ: partidos jugados; PG: ganados; PP: perdidos; Pts: puntos de reglamento.")
+    lines.append("Las posiciones son provisionales mientras haya partidos pendientes.")
+    return "\n".join(lines)
