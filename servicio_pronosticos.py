@@ -55,7 +55,7 @@ def listar_calendario(tournaments):
     return rows
 
 
-def _contexto_competitivo(game, tournament, snapshots):
+def _contexto_competitivo(game, tournament, snapshots, need_rows=None, pressure_rows=None):
     context = {"necesidad_actual": {}, "respuesta_historica_necesidad": {}, "rendimiento_relevante": {}}
     group_no = game.get("grupo")
     groups = tournament.get("grupos") or []
@@ -67,8 +67,10 @@ def _contexto_competitivo(game, tournament, snapshots):
     a, b = str(game.get("jugador_a") or "").strip(), str(game.get("jugador_b") or "").strip()
     if a.casefold() in names and b.casefold() in names:
         context["necesidad_actual"] = clasificar_necesidad(group, names[a.casefold()], names[b.casefold()])
-    need_rows = acumular_radar_necesidad(snapshots).get("jugadores", [])
-    pressure_rows = acumular_historial_presion(snapshots).get("jugadores", [])
+    if need_rows is None:
+        need_rows = acumular_radar_necesidad(snapshots).get("jugadores", [])
+    if pressure_rows is None:
+        pressure_rows = acumular_historial_presion(snapshots).get("jugadores", [])
     for name in (a, b):
         key = name.casefold()
         need = next((r for r in need_rows if str(r.get("jugador") or "").casefold() == key), None)
@@ -86,6 +88,8 @@ def analizar_calendario(db=None):
     liquidacion = feedback.settle_from_snapshots(snapshots)
     calendar = listar_calendario(tournaments)
     reports = []
+    need_rows = acumular_radar_necesidad(snapshots).get("jugadores", [])
+    pressure_rows = acumular_historial_presion(snapshots).get("jugadores", [])
     now = datetime.now(timezone.utc).isoformat()
     for game in calendar:
         if game["estado"] not in {"planned", "upcoming"}:
@@ -107,7 +111,10 @@ def analizar_calendario(db=None):
             )
         if forecast.get("elegible"):
             feedback.record(game, forecast, predicted_at=now)
-        context = _contexto_competitivo(game, tournaments.get(str(game.get("torneo_id")), {}), snapshots)
+        context = _contexto_competitivo(
+            game, tournaments.get(str(game.get("torneo_id")), {}), snapshots,
+            need_rows=need_rows, pressure_rows=pressure_rows,
+        )
         reports.append({"partido": game, "pronostico": forecast, "contexto": context})
     return {
         "torneos": len(tournaments),
