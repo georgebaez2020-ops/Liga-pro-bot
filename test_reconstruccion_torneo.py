@@ -21,6 +21,21 @@ class ReconstruccionTests(unittest.TestCase):
         self.assertEqual(report["secuencia"][0]["tabla_despues"][0]["jugador"], "A")
         self.assertEqual(report["tabla_final_reconstruida"][0]["jugador"], "A")
 
+    def test_must_win_calculation_includes_current_match_win_points(self):
+        matches = [
+            {"hora": "16:00", "jugador_a": "A", "jugador_b": "B", "marcador_sets": "3:0"},
+            {"hora": "16:30", "jugador_a": "A", "jugador_b": "C", "marcador_sets": "3:0"},
+            {"hora": "17:00", "jugador_a": "A", "jugador_b": "D", "marcador_sets": "3:0"},
+            {"hora": "17:30", "jugador_a": "B", "jugador_b": "C", "marcador_sets": "3:0"},
+            {"hora": "18:00", "jugador_a": "B", "jugador_b": "D", "marcador_sets": "0:3"},
+            {"hora": "18:30", "jugador_a": "C", "jugador_b": "D", "marcador_sets": "3:0"},
+        ]
+        report = reconstruir_secuencia(self.players, matches)
+        need = report["secuencia"][-1]["necesidad_antes"]["C"]
+        self.assertTrue(need["debe_ganar_por_puntos_para_seguir_en_fase"])
+        self.assertEqual(need["mejor_puesto_posible_por_puntos_si_gana"], 2)
+        self.assertEqual(need["mejor_puesto_posible_por_puntos_si_pierde"], 4)
+
     def test_rating_delta_and_initial_estimate(self):
         report = reconstruir_secuencia(
             self.players, self.matches,

@@ -147,7 +147,13 @@ def reconstruir_secuencia(jugadores, partidos, rating_torneo=None):
         necessity = {}
         cutoff_phase = 2 if len(names) == 4 else 4
         for player, opponent in ((a, b), (b, a)):
-            win_best = _best_place(before, remaining, player)
+            # Simular el resultado del partido actual antes de proyectar los
+            # partidos restantes. Omitir estos puntos subestima la mejor plaza
+            # posible si el jugador gana y oculta necesidades reales de ganar.
+            win_points = dict(before)
+            win_points[player] += 2
+            win_points[opponent] += 1
+            win_best = _best_place(win_points, remaining, player)
             lose_points = dict(before)
             lose_points[opponent] += 2
             lose_points[player] += 1
