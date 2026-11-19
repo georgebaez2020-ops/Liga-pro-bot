@@ -13,6 +13,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes
 from servicio_pronosticos import (
     analizar_calendario, buscar_h2h, buscar_jugador, cargar_estado, informes,
     listar_calendario, buscar_necesidad, buscar_rendimiento,
+    consultar_torneos_oficiales, formatear_resumen_torneos, formatear_tablas_torneos,
 )
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
@@ -36,6 +37,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Comandos:\n"
         "/estado — estado de la memoria y torneos\n"
         "/calendario — partidos programados y en vivo\n"
+        "/torneos — torneos en vivo y por comenzar (consulta oficial)\n"
+        "/tablas — tablas de esos torneos (consulta oficial)\n"
         "/pronosticos — análisis conservador de próximos partidos\n"
         "/jugador NOMBRE — histórico de un jugador\n"
         "/necesidad NOMBRE — respuesta histórica cuando debía ganar\n"
@@ -318,7 +321,9 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("test", test))
     app.add_handler(CommandHandler("estado", estado))
-    app.add_handler(CommandHandler("calendario", calendario))\n    app.add_handler(CommandHandler("torneos", torneos))\n    app.add_handler(CommandHandler("tablas", tablas))
+    app.add_handler(CommandHandler("calendario", calendario))
+    app.add_handler(CommandHandler("torneos", torneos))
+    app.add_handler(CommandHandler("tablas", tablas))
     app.add_handler(CommandHandler("pronosticos", pronosticos))
     app.add_handler(CommandHandler("jugador", jugador))
     app.add_handler(CommandHandler("necesidad", necesidad))
