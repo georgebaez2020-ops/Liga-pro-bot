@@ -60,7 +60,7 @@ JS_ENLACES_PARTIDOS = r"""
     const parts = new URL(href).pathname.split('/').filter(Boolean);
     return parts.length >= 4 && parts[0] === 'en' &&
       parts[1] === 'tournaments' && parts[2] === String(tid) &&
-      /^\\d+$/.test(parts[3]);
+      /^\d+$/.test(parts[3]);
   })
   .filter((href, index, all) => all.indexOf(href) === index)
 """
