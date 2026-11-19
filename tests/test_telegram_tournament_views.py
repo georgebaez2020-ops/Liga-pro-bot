@@ -43,6 +43,20 @@ class TournamentViewsTests(unittest.IsolatedAsyncioTestCase):
             rows = bot_telegram._torneos_por_estado(tournaments, {"live", "upcoming"})
         self.assertEqual([tid for tid, _ in rows], ["today"])
 
+    def test_tournament_status_comes_from_actual_matches(self):
+        # Una tarjeta del listado puede decir LIVE aunque la ficha ya haya
+        # terminado todos sus partidos. La clasificación debe usar la ficha.
+        self.assertEqual(tablas_scraper.clasificar_estado_partidos([
+            {"estado": "finished"}, {"estado": "finished"}
+        ], "live"), "finished")
+        self.assertEqual(tablas_scraper.clasificar_estado_partidos([
+            {"estado": "finished"}, {"estado": "live"}
+        ], "live"), "live")
+        self.assertEqual(tablas_scraper.clasificar_estado_partidos([
+            {"estado": "finished"}, {"estado": "planned"}
+        ], "live"), "upcoming")
+        self.assertEqual(tablas_scraper.clasificar_estado_partidos([], "live"), "live")
+
     def test_pagination_url_keeps_requested_date_range(self):
         url = "https://tt.league-pro.com/en/tournaments?page=2&status=2"
         filtered = tablas_scraper._aplicar_filtro_fecha(
