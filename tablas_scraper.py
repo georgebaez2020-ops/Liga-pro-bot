@@ -277,9 +277,7 @@ async def extraer(page, torneo):
         })
     partidos_para_enriquecer = list(partidos_ficha_sin_grupo)
     for analisis in analisis_cronologico:
-        partidos_para_enriquecer.extend(
-            p for p in analisis.get("partidos_ficha", []) if p.get("fase") == "group"
-        )
+        partidos_para_enriquecer.extend(analisis.get("partidos_ficha", []))
     await enriquecer_marcadores_live(page, tid, partidos_para_enriquecer)
     calendario = consolidar_partidos_torneo(analisis_cronologico, partidos_ficha_sin_grupo)
     # La fecha se toma de la ficha oficial; las horas de Tournament games
