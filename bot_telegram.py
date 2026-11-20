@@ -91,17 +91,9 @@ def _torneos_por_estado(tournaments, wanted):
         elif not _torneo_es_del_dia_colombia(data, fecha_desde, fecha_hasta):
             continue
 
-        # Regla de seguridad para /vivo: no confiar solo en la etiqueta
-        # general del torneo. Debe existir al menos un partido LIVE real
-        # en el calendario de la ficha; si no, nunca se muestra como en vivo.
-        if "live" in wanted:
-            matches = data.get("partidos") or []
-            has_live_match = any(
-                str(match.get("estado") or "").casefold() == "live"
-                for match in matches
-            )
-            if not has_live_match:
-                continue
+        # El estado LIVE ya fue reconciliado por el scraper con el listado
+        # oficial. No descartar el torneo si la ficha no expone aún el estado
+        # individual; los conteos de partidos seguirán reflejando solo datos verificados.
         rows.append((str(tid), data))
     return rows
 
@@ -119,10 +111,16 @@ def _formatear_torneos(tournaments, wanted, heading):
         live_count = sum(1 for match in matches if match.get("estado") == "live")
         upcoming_count = sum(1 for match in matches if match.get("estado") in {"planned", "upcoming"})
         finished_count = sum(1 for match in matches if match.get("estado") == "finished")
-        lines.append(
-            f"Partidos: 🔴 {live_count} en vivo | ⏳ {upcoming_count} pendientes | "
-            f"✅ {finished_count} finalizados"
-        )
+        if status == "LIVE" and live_count == 0:
+            lines.append(
+                "Partidos: estado LIVE confirmado en el listado oficial; "
+                "detalle individual todavía sin confirmar."
+            )
+        else:
+            lines.append(
+                f"Partidos: 🔴 {live_count} en vivo | ⏳ {upcoming_count} pendientes | "
+                f"✅ {finished_count} finalizados"
+            )
         groups = data.get("grupos") or []
         analyses = data.get("analisis_cronologico") or []
         if groups:
