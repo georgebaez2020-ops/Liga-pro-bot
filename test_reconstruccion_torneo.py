@@ -77,6 +77,50 @@ class ReconstruccionTests(unittest.TestCase):
         self.assertEqual({table[0]["jugador"], table[1]["jugador"]}, {"A", "B"})
         self.assertTrue(any(set(x["jugadores"]) == {"A", "B"} for x in unresolved))
 
+    def test_resolves_duplicate_ratings_with_abbreviated_card_names(self):
+        group = [
+            {"jugador": "Hrabec Jan", "rating": "639"},
+            {"jugador": "Blejchar Marek", "rating": "639"},
+            {"jugador": "Hanel Patrik", "rating": "616"},
+            {"jugador": "Osvald Petr", "rating": "594"},
+        ]
+        page_text = """Tournament games
+Group
+FINISHED
+08:00
+(639)
+Hrabec J
+(616)
+Hanel P
+2
+3
+FINISHED
+08:31
+(639)
+Blejchar M
+(594)
+Osvald P
+1
+3
+"""
+        parsed = parsear_detalle_oficial(page_text, group)
+        self.assertEqual(len(parsed["partidos"]), 2)
+        self.assertEqual(parsed["partidos"][0]["jugador_a"], "Hrabec Jan")
+        self.assertEqual(parsed["partidos"][0]["jugador_b"], "Hanel Patrik")
+        self.assertEqual(parsed["partidos"][1]["jugador_a"], "Blejchar Marek")
+        self.assertEqual(parsed["partidos"][1]["jugador_b"], "Osvald Petr")
+        self.assertTrue(any("no se encontró fecha oficial" in x["motivo"] for x in parsed["advertencias"]))
+        self.assertFalse(any("jugador" in x["motivo"].lower() or "rating" in x["motivo"].lower() for x in parsed["advertencias"]))
+
+    def test_keeps_ambiguous_abbreviated_names_unresolved(self):
+        from reconstruccion_torneo import _resolver_jugador_por_rating_y_nombre
+        ratings = {"639": ["Hrabec Jan", "Hrabec Jiri"]}
+        self.assertIsNone(_resolver_jugador_por_rating_y_nombre("639", "Hrabec J", ratings))
+        self.assertEqual(
+            _resolver_jugador_por_rating_y_nombre("639", "Hrabec Jan", ratings),
+            "Hrabec Jan",
+        )
+
     def test_parses_multiline_official_finished_matches(self):
         group = [
             {"jugador": "Picek Petr", "rating": "614"},
@@ -244,6 +288,44 @@ Mares F
         self.assertEqual(second["puntos_sets_b"], [11, 10, 15, 10, 11])
         self.assertEqual((second["puntos_juego_a"], second["puntos_juego_b"]), (48, 57))
 
+    def test_parses_finished_match_cards_with_T_score_marker(self):
+        group = [
+            {"jugador": "Chlebecek Marek", "rating": "807"},
+            {"jugador": "Sobisek Martin", "rating": "798"},
+            {"jugador": "Zmuda Petr", "rating": "847"},
+            {"jugador": "Bayer Ales", "rating": "787"},
+            {"jugador": "Brozik Karel", "rating": "851"},
+        ]
+        page_text = """Tournament games
+Group
+FINISHED
+03:30
+(807)
+Chlebecek M
+(851)
+Brozik K
+T
+3
+0
+FINISHED
+04:30
+(851)
+Brozik K
+(847)
+Zmuda P
+0
+T
+3
+"""
+        parsed = parsear_detalle_oficial(page_text, group)
+        self.assertEqual(len(parsed["partidos"]), 2)
+        self.assertEqual(parsed["partidos"][0]["marcador_sets"], "3:0")
+        self.assertEqual(parsed["partidos"][0]["marcador_marca"], "T")
+        self.assertEqual(parsed["partidos"][1]["marcador_sets"], "0:3")
+        self.assertEqual(parsed["partidos"][1]["marcador_marca"], "T")
+        self.assertEqual(parsed["partidos"][0]["jugador_a"], "Chlebecek Marek")
+        self.assertEqual(parsed["partidos"][1]["jugador_b"], "Zmuda Petr")
+
     def test_parses_upcoming_roster_without_group_table(self):
         page_text = """Players
 #
@@ -299,8 +381,37 @@ Player D
         parsed = parsear_detalle_oficial(page_text, group)
         self.assertEqual(parsed["partidos"][0]["estado"], "live")
         self.assertIsNone(parsed["partidos"][0]["marcador_sets"])
+        self.assertEqual(parsed["partidos"][0]["marcador_live_sets"], "1:2")
+        self.assertEqual(parsed["partidos"][0]["marcador_live_texto"], "1 2")
         self.assertEqual(parsed["partidos"][1]["estado"], "planned")
         self.assertIsNone(parsed["partidos"][1]["marcador_sets"])
+        self.assertIsNone(parsed["partidos"][1]["marcador_live_sets"])
+
+    def test_live_tournament_card_does_not_guess_when_more_than_two_numbers_are_visible(self):
+        group = [{"jugador": "A", "rating": "384"}, {"jugador": "B", "rating": "366"},
+                 {"jugador": "C", "rating": "313"}, {"jugador": "D", "rating": "409"}]
+        page_text = """Tournament games
+Group
+LIVE
+08:00
+(384)
+Player A
+(366)
+Player B
+11
+7
+1
+2
+PLANNED
+08:30
+(313)
+Player C
+(409)
+Player D
+"""
+        parsed = parsear_detalle_oficial(page_text, group)
+        self.assertEqual(parsed["partidos"][0]["marcador_live_texto"], "11 7 1 2")
+        self.assertIsNone(parsed["partidos"][0]["marcador_live_sets"])
 
     def test_consolidates_official_schedule_for_prediction_engine(self):
         analyses = [{
@@ -326,6 +437,29 @@ Player D
         ])
         self.assertEqual(len(result["partidos_programados"]), 1)
         self.assertIsNone(result["partidos_programados"][0]["grupo"])
+
+
+    def test_live_score_parser_accepts_zero_zero_and_rejects_ambiguous_text(self):
+        from reconstruccion_torneo import parsear_marcador_sets_live
+        self.assertEqual(parsear_marcador_sets_live("0:0"), "0:0")
+        self.assertEqual(parsear_marcador_sets_live("1:2"), "1:2")
+        self.assertIsNone(parsear_marcador_sets_live("1:2\n0:1"))
+        self.assertIsNone(parsear_marcador_sets_live("11:7 / 1:3"))
+
+    def test_live_match_page_score_is_mapped_to_tournament_player_order(self):
+        from tablas_scraper import _marcador_en_ficha_partido
+        # Formato observado en la ficha oficial: rating delante y detrás del nombre.
+        text = "Match\n#847 Smrcek Milan\n0:1\nVarcl Jan #950\n"
+        self.assertEqual(_marcador_en_ficha_partido(text, "Smrcek Milan", "Varcl Jan"), "0:1")
+        reversed_text = "Match\nVarcl Jan #950\n1:0\n#847 Smrcek Milan\n"
+        self.assertEqual(_marcador_en_ficha_partido(reversed_text, "Smrcek Milan", "Varcl Jan"), "0:1")
+
+    def test_live_match_page_ignores_current_game_points_and_ambiguous_names(self):
+        from tablas_scraper import _marcador_en_ficha_partido
+        text = "Torneo\nVolf Matej\nEN VIVO\n1:0\n11:7 / 1:3\nDedek Jiri\n"
+        self.assertEqual(_marcador_en_ficha_partido(text, "Volf Matej", "Dedek Jiri"), "1:0")
+        ambiguous = "Match\nHrabec J\n1:2\nHrabec Jan\n"
+        self.assertIsNone(_marcador_en_ficha_partido(ambiguous, "Hrabec Jan", "Hrabec Jiri"))
 
 
 if __name__ == "__main__":

@@ -1,0 +1,102 @@
+name: Live Czech Liga Pro scraper smoke test
+
+on:
+  push:
+    branches:
+      - integration/telegram-prediction-engine
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live-scraper:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+      - name: Install Chromium
+        run: python -m playwright install --with-deps chromium
+      - name: Compile scraper and timezone modules
+        run: python -m py_compile tablas_scraper.py reconstruccion_torneo.py servicio_pronosticos.py
+      - name: Scrape current Colombia date from official league site
+        env:
+          MAX_TORNEOS: '30'
+          MAX_PAGINAS: '2'
+          STATUS: all
+        run: python tablas_scraper.py
+      - name: Validate live extraction output
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path("salida/tablas.json").read_text(encoding="utf-8"))
+          tournaments = data.get("torneos", {})
+          errors = {tid: row.get("error") for tid, row in tournaments.items() if row.get("error")}
+          scheduled = [
+              match
+              for tournament in tournaments.values()
+              for match in tournament.get("partidos", [])
+              if match.get("scheduled_at")
+          ]
+          live_matches = [
+              (tid, match)
+              for tid, tournament in tournaments.items()
+              for match in tournament.get("partidos_en_vivo", [])
+          ]
+          live_with_score = [
+              (tid, match)
+              for tid, match in live_matches
+              if match.get("marcador_live_sets")
+          ]
+          print("Fecha Colombia:", data.get("dia_colombia"))
+          print("Resumen:", data.get("resumen"))
+          print("Torneos:", len(tournaments))
+          print("Partidos con horario verificable:", len(scheduled))
+          print("Partidos LIVE:", len(live_matches))
+          print("Partidos LIVE con marcador de sets:", len(live_with_score))
+          for tid, match in live_matches:
+              print("LIVE", tid, match.get("jugador_a"), "-", match.get("jugador_b"),
+                    "sets:", match.get("marcador_live_sets"),
+                    "texto:", match.get("marcador_live_texto"))
+          for tid, tournament in tournaments.items():
+              matches = tournament.get("partidos", [])
+              planned = [m for m in matches if m.get("estado") in ("planned", "upcoming")]
+              print({
+                  "torneo": tid,
+                  "estado": tournament.get("estado"),
+                  "fecha_torneo": tournament.get("fecha_torneo"),
+                  "partidos": len(matches),
+                  "programados": len(planned),
+                  "horas_detectadas": [m.get("hora") for m in planned[:8]],
+                  "fechas_programadas": [m.get("fecha") for m in planned[:8]],
+              })
+              lines = (tournament.get("detalle_texto") or "").splitlines()
+              for i, line in enumerate(lines):
+                  if line.strip().casefold() in ("group", "tournament games"):
+                      print("SECCION", tid, lines[i:i+14])
+          if errors:
+              raise SystemExit(f"Errores al extraer fichas: {errors}")
+          if not tournaments:
+              raise SystemExit("El listado oficial no devolvió torneos; no se puede validar extracción real.")
+          if not any(row.get("detalle_texto") for row in tournaments.values()):
+              raise SystemExit("No se obtuvo texto visible de ninguna ficha de torneo.")
+          if live_matches and len(live_with_score) != len(live_matches):
+              missing = [
+                  f"{tid}: {match.get('jugador_a')} vs {match.get('jugador_b')}"
+                  for tid, match in live_matches if not match.get("marcador_live_sets")
+              ]
+              raise SystemExit("Partidos LIVE sin marcador de sets: " + "; ".join(missing))
+          PY
+      - name: Upload live scrape evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: liga-pro-live-scrape
+          path: salida/
+          if-no-files-found: warn

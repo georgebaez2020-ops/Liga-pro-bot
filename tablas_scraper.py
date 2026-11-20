@@ -1,18 +1,19 @@
 import asyncio
 import csv
+import gc
 import json
 import os
 import re
-from datetime import datetime
-from urllib.parse import urljoin
+from datetime import datetime, timedelta
+from urllib.parse import parse_qs, urlencode, urljoin, urlsplit, urlunsplit
 from zoneinfo import ZoneInfo
 
 from playwright.async_api import async_playwright
 
 from db import HistoryDB
-from inteligencia_torneo import integrar_inteligencia_en_resultado
 from reconstruccion_torneo import (
-    consolidar_partidos_torneo, parsear_detalle_oficial, reconstruir_secuencia,
+    _nombre_ficha_coincide, consolidar_partidos_torneo, parsear_detalle_oficial,
+    parsear_marcador_sets_live, reconstruir_secuencia,
 )
 
 COL = ZoneInfo("America/Bogota")
@@ -23,9 +24,9 @@ MAX_TORNEOS = int(os.getenv("MAX_TORNEOS", "100"))
 MAX_PAGINAS = int(os.getenv("MAX_PAGINAS", "10"))
 ESTADOS = ("live", "upcoming", "finished")
 ETIQUETAS_ESTADO = {
-    "live": ("live", "in progress"),
-    "upcoming": ("upcoming",),
-    "finished": ("finished",),
+    "live": ("live", "in progress", "en vivo", "en directo"),
+    "upcoming": ("upcoming", "próximamente", "proximamente", "planificado", "planificada"),
+    "finished": ("finished", "finalizado", "finalizada"),
 }
 
 # En la ficha de cada torneo: una fila por jugador.
@@ -41,16 +42,91 @@ JS_FILAS = r"""
 # En el listado, conserva el texto de la fila contenedora para leer el estado
 # que muestra la propia web. No se asignan códigos numéricos supuestos.
 JS_TORNEOS = r"""
-() => Array.from(document.querySelectorAll('a[href*="/en/tournaments/"]')).map(a => {
-  const card = a.closest(".c-tournament-item") || a.closest(".c-live-matches-item") || a;
-  return {
-    href: a.href,
-    text: (card.innerText || card.textContent || "").trim(),
-    className: typeof card.className === "string" ? card.className : "",
-    linkClass: typeof a.className === "string" ? a.className : ""
-  };
-})
+() => Array.from(document.querySelectorAll('a[href*="/en/tournaments/"]'))
+  // Solo enlaces a la ficha del torneo. Los enlaces de partidos tienen
+  // segmentos adicionales (/ID_PARTIDO) y no deben convertirse en torneos.
+  .filter(a => /^\/en\/tournaments\/\d+\/?$/.test(new URL(a.href).pathname))
+  .map(a => {
+    // La página publica los torneos en filas con columnas Date, Tournament,
+    // Players, Status y Winner. Leer la fila completa permite obtener el
+    // estado oficial; usar solo el <a> deja el estado como unknown.
+    const card = a.closest("tr")
+      || a.closest(".c-tournament-item")
+      || a.closest(".c-live-matches-item")
+      || a.parentElement;
+    return {
+      href: a.href,
+      text: (card?.innerText || card?.textContent || "").trim(),
+      className: typeof card?.className === "string" ? card.className : "",
+      linkClass: typeof a.className === "string" ? a.className : ""
+    };
+  })
 """
+
+JS_ENLACES_PARTIDOS = r"""
+(tid) => Array.from(document.querySelectorAll('a[href*="/en/tournaments/"]'))
+  .map(a => a.href)
+  .filter(href => {
+    const parts = new URL(href).pathname.split('/').filter(Boolean);
+    return parts.length >= 4 && parts[0] === 'en' &&
+      parts[1] === 'tournaments' && parts[2] === String(tid) &&
+      /^\d+$/.test(parts[3]);
+  })
+  .filter((href, index, all) => all.indexOf(href) === index)
+"""
+
+
+def _marcador_en_ficha_partido(texto, jugador_a, jugador_b):
+    """Lee el marcador de sets entre los dos jugadores, sin confundir puntos del set."""
+    lineas = [line.strip() for line in str(texto or "").splitlines() if line.strip()]
+    def es_jugador(linea, nombre):
+        # Las fichas oficiales pueden anteponer o añadir el rating (#847 / (847)).
+        nombre_limpio = re.sub(r"#\s*\d+\b|\(\s*\d+\s*\)", " ", linea)
+        return _nombre_ficha_coincide(nombre_limpio, str(nombre or ""))
+
+    pos_a = [i for i, line in enumerate(lineas) if es_jugador(line, jugador_a)]
+    pos_b = [i for i, line in enumerate(lineas) if es_jugador(line, jugador_b)]
+    if len(pos_a) != 1 or len(pos_b) != 1 or pos_a[0] == pos_b[0]:
+        return None
+    a, b = pos_a[0], pos_b[0]
+    lo, hi = sorted((a, b))
+    scores = [parsear_marcador_sets_live(line) for line in lineas[lo + 1:hi]]
+    scores = [score for score in scores if score is not None]
+    if len(scores) != 1:
+        return None
+    score = scores[0]
+    if a < b:
+        return score
+    left, right = score.split(":")
+    return f"{right}:{left}"
+
+
+async def enriquecer_marcadores_live(page, torneo_id, partidos):
+    """Consulta fichas individuales oficiales y añade solo parciales no ambiguos."""
+    live = [m for m in partidos if m.get("estado") == "live" and not m.get("marcador_live_sets")]
+    if not live:
+        return {"consultados": 0, "actualizados": 0}
+    enlaces = await page.evaluate(JS_ENLACES_PARTIDOS, str(torneo_id))
+    consultados = actualizados = 0
+    for href in enlaces:
+        try:
+            await page.goto(href, wait_until="domcontentloaded", timeout=30000)
+            texto = await page.locator("body").inner_text()
+            consultados += 1
+        except Exception:
+            continue
+        for partido in live:
+            if partido.get("marcador_live_sets"):
+                continue
+            score = _marcador_en_ficha_partido(
+                texto, partido.get("jugador_a"), partido.get("jugador_b")
+            )
+            if score is not None:
+                partido["marcador_live_sets"] = score
+                partido["fuente_marcador_live"] = href
+                actualizados += 1
+                break
+    return {"consultados": consultados, "actualizados": actualizados}
 
 
 def url_lista(dia_col):
@@ -61,6 +137,24 @@ def url_lista(dia_col):
     return f"{BASE}?date_from={inicio}&date_to={fin}"
 
 
+def rango_fechas_praga(dia_col):
+    """Devuelve las fechas de Praga que cubren el día calendario de Colombia."""
+    y, m, d = (int(x) for x in dia_col.split("-"))
+    inicio = datetime(y, m, d, 0, 0, tzinfo=COL).astimezone(PRAGA).date()
+    fin = datetime(y, m, d, 23, 59, tzinfo=COL).astimezone(PRAGA).date()
+    return inicio.isoformat(), fin.isoformat()
+
+
+def _aplicar_filtro_fecha(url, fecha_desde, fecha_hasta):
+    """Conserva la paginación, pero fuerza siempre el rango del día solicitado."""
+    parts = urlsplit(url)
+    query = parse_qs(parts.query, keep_blank_values=True)
+    query["date_from"] = [fecha_desde]
+    query["date_to"] = [fecha_hasta]
+    return urlunsplit((parts.scheme, parts.netloc, parts.path,
+                       urlencode(query, doseq=True), parts.fragment))
+
+
 def normalizar_estado(texto, clase=""):
     """Clasifica usando la tarjeta concreta, no texto de contenedores globales."""
     clase = (clase or "").lower()
@@ -69,7 +163,7 @@ def normalizar_estado(texto, clase=""):
         return "live"
     coincidencias = {
         estado for estado, etiquetas in ETIQUETAS_ESTADO.items()
-        if any(re.search(rf"\b{re.escape(etiqueta)}\b", texto) for etiqueta in etiquetas)
+        if any(etiqueta in texto for etiqueta in etiquetas)
     }
     return coincidencias.pop() if len(coincidencias) == 1 else "unknown"
 
@@ -124,13 +218,15 @@ def armar_grupos(filas):
 
 async def descubrir(page, dia_col, estados_solicitados):
     """Recorre las páginas del listado y clasifica por la etiqueta visible."""
+    fecha_desde, fecha_hasta = rango_fechas_praga(dia_col)
     primera = url_lista(dia_col)
     pendientes = [primera]
     visitadas = set()
     encontrados = {}
+    filas_diagnostico = []
 
     while pendientes and len(visitadas) < MAX_PAGINAS:
-        url = pendientes.pop(0)
+        url = _aplicar_filtro_fecha(pendientes.pop(0), fecha_desde, fecha_hasta)
         if url in visitadas:
             continue
         visitadas.add(url)
@@ -139,10 +235,8 @@ async def descubrir(page, dia_col, estados_solicitados):
         await page.wait_for_timeout(1200)
 
         filas = await page.evaluate(JS_TORNEOS)
-        # Diagnóstico temporal: estructura real de tarjetas y etiquetas visibles.
-        os.makedirs(SALIDA, exist_ok=True)
-        with open(f"{SALIDA}/debug_listado.json", "w", encoding="utf-8") as debug_file:
-            json.dump(filas, debug_file, ensure_ascii=False, indent=2)
+        # Acumulamos el diagnóstico de todas las páginas; no sobrescribir la anterior.
+        filas_diagnostico.extend(filas)
         for item in filas:
             href = item.get("href", "")
             match = re.search(r"/en/tournaments/(\d+)", href)
@@ -167,9 +261,13 @@ async def descubrir(page, dia_col, estados_solicitados):
             'a[href*="page="]', "(els) => els.map(a => a.href)"
         )
         for siguiente in paginas:
+            siguiente = _aplicar_filtro_fecha(siguiente, fecha_desde, fecha_hasta)
             if siguiente not in visitadas and siguiente not in pendientes:
                 pendientes.append(siguiente)
 
+    os.makedirs(SALIDA, exist_ok=True)
+    with open(f"{SALIDA}/debug_listado_{dia_col}.json", "w", encoding="utf-8") as debug_file:
+        json.dump(filas_diagnostico, debug_file, ensure_ascii=False, indent=2)
     return list(encontrados.values())
 
 
@@ -206,14 +304,44 @@ async def extraer(page, torneo):
         )
         analisis_cronologico.append({
             "grupo": numero,
+            "fecha_torneo": extraido.get("fecha_torneo"),
             "partidos_ficha": extraido["partidos"],
             "rating_por_jugador": extraido["rating_por_jugador"],
             "reconstruccion": reconstruido,
             "advertencias_extraccion": extraido["advertencias"],
         })
+    partidos_para_enriquecer = list(partidos_ficha_sin_grupo)
+    for analisis in analisis_cronologico:
+        partidos_para_enriquecer.extend(analisis.get("partidos_ficha", []))
+    await enriquecer_marcadores_live(page, tid, partidos_para_enriquecer)
     calendario = consolidar_partidos_torneo(analisis_cronologico, partidos_ficha_sin_grupo)
+    # La fecha se toma de la ficha oficial; las horas de Tournament games
+    # corresponden a la hora local de la competición (Praga).
+    fecha_torneo = next(
+        (x.get("fecha_torneo") for x in analisis_cronologico if x.get("fecha_torneo")),
+        None,
+    )
+    if not fecha_torneo:
+        fecha_torneo = extraido.get("fecha_torneo")
+    for partido in calendario["partidos"]:
+        partido["fecha"] = fecha_torneo
+        partido["zona_horaria"] = "Europe/Prague" if fecha_torneo else None
+        hora = partido.get("hora")
+        if fecha_torneo and isinstance(hora, str) and re.fullmatch(r"\d{1,2}:\d{2}", hora):
+            try:
+                local = datetime.fromisoformat(f"{fecha_torneo}T{hora}").replace(tzinfo=PRAGA)
+                partido["scheduled_at"] = local.isoformat(timespec="minutes")
+                partido["hora_praga"] = local.strftime("%H:%M")
+                partido["hora_colombia"] = local.astimezone(COL).strftime("%H:%M")
+                partido["fecha_colombia"] = local.astimezone(COL).date().isoformat()
+            except ValueError:
+                partido["scheduled_at"] = None
+        else:
+            partido["scheduled_at"] = None
     return {
         **torneo,
+        "fecha_torneo": fecha_torneo,
+        "zona_horaria": "Europe/Prague" if fecha_torneo else None,
         **calendario,
         "grupos": grupos,
         "detalle_texto": detalle_texto,
@@ -223,6 +351,33 @@ async def extraer(page, torneo):
         "grupos_completos": len(grupos),
         "aviso": None if grupos else "no se pudieron formar grupos completos de 4 o 5",
     }
+
+
+def clasificar_estado_partidos(partidos, estado_listado="unknown"):
+    """
+    Reconcilia el estado de la ficha con el estado visible en el listado oficial.
+
+    Un LIVE del listado prevalece cuando la ficha no ofrece una señal concluyente
+    de que todos los partidos terminaron. Los estados individuales se conservan
+    para marcadores y conteos; no se inventan partidos LIVE.
+    """
+    estado_listado = str(estado_listado or "unknown").strip().casefold()
+    estados = {
+        str(partido.get("estado") or "").strip().casefold()
+        for partido in (partidos or [])
+        if partido.get("estado")
+    }
+    if "live" in estados:
+        return "live"
+    if estados and estados.issubset({"finished"}):
+        return "finished"
+    if estado_listado == "live":
+        # El listado oficial confirma que el torneo está activo, aunque la
+        # ficha individual aún no haya expuesto el estado de sus encuentros.
+        return "live"
+    if estados.intersection({"planned", "upcoming"}):
+        return "upcoming"
+    return "unknown"
 
 
 def estados_configurados():
@@ -249,6 +404,7 @@ async def main():
         "generado": datetime.now(COL).isoformat(timespec="seconds"),
         "zona_horaria": "America/Bogota",
         "dia_colombia": dia,
+        "dias_colombia_consultados": [],
         "filtro_estados": sorted(estados),
         "torneos": {},
         "resumen": {"live": 0, "upcoming": 0, "finished": 0, "unknown": 0},
@@ -260,6 +416,14 @@ async def main():
             args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
         )
         page = await browser.new_page()
+        # Reduce el consumo de RAM en Render: el scraper solo necesita HTML/texto
+        # y las respuestas de red; no necesita descargar imágenes, fuentes ni video.
+        async def bloquear_recursos_pesados(route):
+            if route.request.resource_type in {"image", "media", "font"}:
+                await route.abort()
+            else:
+                await route.continue_()
+        await page.route("**/*", bloquear_recursos_pesados)
 
         if torneos_manual:
             lista = [
@@ -267,14 +431,92 @@ async def main():
                  "texto_listado": "TORNEOS configurado manualmente"}
                 for tid in torneos_manual
             ]
+            dias_consultados = [dia]
         else:
-            lista = await descubrir(page, dia, estados)
-            print(f"Torneos identificados en el listado: {len(lista)}")
+            # Además del día actual, consulta el siguiente día colombiano para
+            # que /proximos no quede vacío al terminar la jornada de hoy.
+            incluir_siguiente = os.getenv("INCLUIR_DIA_SIGUIENTE", "1").strip().lower() not in {"0", "false", "no"}
+            dias_consultados = [dia]
+            if incluir_siguiente:
+                siguiente_dia = (
+                    datetime.strptime(dia, "%Y-%m-%d").date() + timedelta(days=1)
+                ).isoformat()
+                dias_consultados.append(siguiente_dia)
 
+            por_id = {}
+            for dia_consulta in dias_consultados:
+                lista_dia = await descubrir(page, dia_consulta, estados)
+                print(
+                    f"Torneos identificados para {dia_consulta}: {len(lista_dia)}"
+                )
+                for torneo_encontrado in lista_dia:
+                    tid_encontrado = str(torneo_encontrado["id"])
+                    anterior = por_id.get(tid_encontrado)
+                    prioridad = {"live": 0, "upcoming": 1, "unknown": 2, "finished": 3}
+                    if anterior is None or prioridad.get(torneo_encontrado.get("estado"), 2) < prioridad.get(anterior.get("estado"), 2):
+                        por_id[tid_encontrado] = torneo_encontrado
+            lista = list(por_id.values())
+
+        resultado["dias_colombia_consultados"] = dias_consultados
+
+        # Procesar primero torneos activos o próximos para que el límite de
+        # memoria no deje fuera los eventos de mayor interés operativo.
+        prioridad_estado = {"live": 0, "upcoming": 1, "unknown": 2, "finished": 3}
+        lista = sorted(
+            enumerate(lista),
+            key=lambda par: (prioridad_estado.get(str(par[1].get("estado", "unknown")).lower(), 2), par[0]),
+        )
+        lista = [torneo for _, torneo in lista]
+        if len(lista) > MAX_TORNEOS:
+            omitidos = lista[MAX_TORNEOS:]
+            print(
+                f"Se procesarán {MAX_TORNEOS} de {len(lista)} torneos; "
+                f"quedan pendientes: " + ", ".join(
+                    f'{x.get("id")}({x.get("estado", "unknown")})' for x in omitidos
+                )
+            )
         for torneo in lista[:MAX_TORNEOS]:
             tid = torneo["id"]
             try:
                 dato = await extraer(page, torneo)
+                # Reconciliamos la etiqueta del listado con el calendario extraído.
+                # Un estado LIVE obsoleto no debe prevalecer si todos los partidos
+                # que publica la ficha ya terminaron. Si aún hay partidos LIVE o
+                # pendientes, el torneo conserva ese estado operativo.
+                estado_oficial = str(torneo.get("estado") or "unknown").casefold()
+                estado_calendario = clasificar_estado_partidos(
+                    dato.get("partidos", []), estado_oficial
+                )
+                dato["estado_listado"] = estado_oficial
+                dato["estado"] = estado_calendario
+                if estado_calendario != estado_oficial:
+                    print(
+                        f"Torneo {tid}: estado del listado={estado_oficial}; "
+                        f"estado según partidos={estado_calendario}. Se guarda {estado_calendario}."
+                    )
+                fecha_oficial = dato.get("fecha_torneo")
+                rangos_praga = [rango_fechas_praga(dia_consulta) for dia_consulta in dias_consultados]
+                fechas_partidos_col = {
+                    str(p.get("fecha_colombia"))
+                    for p in dato.get("partidos", [])
+                    if p.get("fecha_colombia")
+                }
+                # Acepta partidos de cualquiera de los días consultados,
+                # usando sus fechas colombianas o el rango oficial de Praga.
+                corresponde_periodo = (
+                    bool(set(dias_consultados).intersection(fechas_partidos_col))
+                    or any(
+                        fecha_oficial and fecha_desde <= fecha_oficial <= fecha_hasta
+                        for fecha_desde, fecha_hasta in rangos_praga
+                    )
+                )
+                if not corresponde_periodo:
+                    print(
+                        f"Torneo {tid} descartado: fecha oficial {fecha_oficial or 'no publicada'}; "
+                        f"fechas de partidos en Colombia {sorted(fechas_partidos_col)}; "
+                        f"días consultados {dias_consultados}."
+                    )
+                    continue
                 resultado["torneos"][tid] = dato
                 resultado["resumen"][dato["estado"]] += 1
             except Exception as exc:
@@ -285,10 +527,9 @@ async def main():
                 resultado["resumen"][torneo["estado"]] += 1
 
         await browser.close()
-
-    # Analiza antes de escribir archivos o snapshots para que todos conserven el análisis.
-    integrar_inteligencia_en_resultado(resultado)
-    print("Resumen de inteligencia:", json.dumps(resultado["resumen_inteligencia"], ensure_ascii=False))
+        del page
+        del browser
+        gc.collect()
 
     os.makedirs(SALIDA, exist_ok=True)
     with open(f"{SALIDA}/tablas.json", "w", encoding="utf-8") as f:
@@ -299,30 +540,7 @@ async def main():
     guardado = history_db.save_scrape(resultado)
     print("Memoria histórica actualizada:", json.dumps(guardado, ensure_ascii=False))
 
-    # Ciclo de retroalimentación: liquidar pronósticos solo con marcadores
-    # completos observados después de la fecha en que fueron registrados.
-    from retroalimentacion import PredictionFeedback
-    feedback = PredictionFeedback(history_db)
-    liquidacion = feedback.settle_from_snapshots(history_db.listar_snapshots())
-    metricas = feedback.metrics()
-    print("Retroalimentación:", json.dumps(liquidacion, ensure_ascii=False))
-    print("Evaluación acumulada:", json.dumps(metricas, ensure_ascii=False))
-    with open(f"{SALIDA}/evaluacion_modelo.json", "w", encoding="utf-8") as f:
-        json.dump({"liquidacion": liquidacion, "metricas": metricas},
-                  f, ensure_ascii=False, indent=2)
-
-    # Perfiles descriptivos se recalculan desde cero con el histórico completo.
-    # No se usan como variables predictivas hasta superar pruebas walk-forward.
-    from radar_necesidad import acumular_radar_necesidad
-    from historial_rendimiento import acumular_historial_presion
-    snapshots = history_db.listar_snapshots()
-    for filename, report in (
-        ("radar_necesidad.json", acumular_radar_necesidad(snapshots)),
-        ("rendimiento_competitivo.json", acumular_historial_presion(snapshots)),
-    ):
-        with open(f"{SALIDA}/{filename}", "w", encoding="utf-8") as f:
-            json.dump(report, f, ensure_ascii=False, indent=2)
-
+    # En esta fase solo se conserva el historial scrapeado; el análisis avanzado queda aplazado.
     with open(f"{SALIDA}/tablas.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow([

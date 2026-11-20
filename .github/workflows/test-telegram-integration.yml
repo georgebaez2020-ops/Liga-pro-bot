@@ -1,0 +1,37 @@
+name: Telegram integration checks
+
+on:
+  push:
+    branches:
+      - integration/telegram-prediction-engine
+  pull_request:
+    branches:
+      - feature/status-upcoming-live-finished
+      - feature/consulta-en-vivo-torneos-tablas
+
+permissions:
+  contents: read
+
+jobs:
+  integration-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install project dependencies
+        run: pip install -r requirements.txt
+      - name: Compile Telegram integration
+        run: python -m py_compile bot_telegram.py servicio_pronosticos.py tablas_scraper.py reconstruccion_torneo.py test_live_scraper.py
+      - name: Test prediction service and feedback
+        run: |
+          python -m unittest -v \
+            test_servicio_pronosticos.py \
+            tests/test_motor_pronosticos.py \
+            tests/test_retroalimentacion.py \
+            test_db.py \
+            test_backfill_historico.py \
+            test_reconstruccion_torneo.py \
+            test_live_scraper.py \
+            tests/test_telegram_tournament_views.py

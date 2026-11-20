@@ -70,5 +70,27 @@ class HistoryDBTests(unittest.TestCase):
             self.assertEqual(conn.execute("SELECT COUNT(*) FROM tournament_snapshots").fetchone()[0], 1)
 
 
+    def test_historical_backfill_is_idempotent_by_official_date(self):
+        tournament = {
+            "id": "99001", "estado": "finished", "fecha_torneo": "2026-01-31",
+            "grupos": [[
+                {"jugador": "Hist A", "pos": "1", "rating": "700",
+                 "resultados": ["|||", "3 : 1"], "sets": "3:1"},
+                {"jugador": "Hist B", "pos": "2", "rating": "690",
+                 "resultados": ["1 : 3", "|||"], "sets": "1:3"}
+            ]]
+        }
+        first = self.db.save_historical_scrape(tournament)
+        second = self.db.save_historical_scrape(tournament)
+        self.assertEqual(first["snapshots"], 1)
+        self.assertEqual(second["snapshots"], 1)
+        snapshots = self.db.listar_snapshots()
+        self.assertEqual(len(snapshots), 1)
+        self.assertEqual(snapshots[0]["payload"]["fecha_torneo"], "2026-01-31")
+
+    def test_historical_backfill_requires_official_date(self):
+        with self.assertRaises(ValueError):
+            self.db.save_historical_scrape({"id": "99002", "grupos": []})
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,0 +1,258 @@
+"""Backfill idempotente del archivo oficial de Czech Liga Pro.
+
+Recorre fechas históricas una por una para respetar los filtros públicos del sitio.
+Puede reanudarse: cada torneo se vuelve a guardar con una marca temporal estable.
+"""
+from __future__ import annotations
+
+import asyncio
+import json
+import os
+import re
+from datetime import date, datetime, timedelta
+from pathlib import Path
+from zoneinfo import ZoneInfo
+
+from playwright.async_api import async_playwright
+
+from db import HistoryDB
+from inteligencia_torneo import integrar_inteligencia_en_resultado
+from tablas_scraper import BASE, MAX_PAGINAS, SALIDA, extraer
+
+PRAGA = ZoneInfo("Europe/Prague")
+COL = ZoneInfo("America/Bogota")
+
+
+def restar_meses(dia: date, meses: int) -> date:
+    """Resta meses calendario conservando el día cuando existe."""
+    import calendar
+    indice = dia.year * 12 + dia.month - 1 - meses
+    year, month0 = divmod(indice, 12)
+    month = month0 + 1
+    return date(year, month, min(dia.day, calendar.monthrange(year, month)[1]))
+
+
+def fecha_env(nombre: str, defecto: date) -> date:
+    raw = os.getenv(nombre, "").strip()
+    return date.fromisoformat(raw) if raw else defecto
+
+
+def url_lista_rango(inicio: date, fin: date) -> str:
+    return f"{BASE}?date_from={inicio.isoformat()}&date_to={(fin + timedelta(days=1)).isoformat()}"
+
+
+def extraer_id_torneo(href: str) -> str | None:
+    """Extrae solo IDs numéricos de rutas oficiales de torneo."""
+    match = re.search(r"/en/tournaments/(\d+)(?:[/?#]|$)", str(href or ""))
+    return match.group(1) if match else None
+
+
+async def descubrir_fecha(page, dia: date) -> list[dict]:
+    """Enumera IDs de torneo en todas las páginas observadas para ese día."""
+    pendientes = [url_lista_rango(dia, dia)]
+    visitadas, encontrados = set(), {}
+    diagnosticos = []
+    while pendientes and len(visitadas) < MAX_PAGINAS:
+        url = pendientes.pop(0)
+        if url in visitadas:
+            continue
+        visitadas.add(url)
+        await page.goto(url, wait_until="domcontentloaded", timeout=60000)
+        await page.wait_for_timeout(700)
+        diagnostico = await page.evaluate("""() => {
+          const anchors = Array.from(document.querySelectorAll('a[href*="/en/tournaments/"]'));
+          const candidatos = anchors.map(a => {
+            const card = a.closest(".c-tournament-item") || a.closest(".c-live-matches-item") || a;
+            return {href:a.href, className:typeof card.className === "string" ? card.className : "",
+                    text:(card.innerText || card.textContent || "").trim().slice(0,180)};
+          });
+          // El carrusel superior contiene partidos en vivo de hoy, incluso al filtrar
+          // fechas antiguas. Se excluye únicamente ese contenedor; el listado histórico
+          // se obtiene del resto de enlaces oficiales, sin depender de una clase supuesta.
+          const items = anchors.filter(a => !a.closest(".c-live-matches-item")).map(a => {
+            const card = a.closest(".c-tournament-item") || a.parentElement || a;
+            return {href:a.href, text:(card.innerText || card.textContent || "").trim(),
+                    className:typeof card.className === "string" ? card.className : ""};
+          });
+          return {items, candidatos, title:document.title, url:location.href,
+                  body:(document.body.innerText || "").trim().slice(0,1200)};
+        }""")
+        items = diagnostico["items"]
+        resultado_diag = {
+            "fecha_consultada": dia.isoformat(),
+            "url_solicitada": url,
+            "url_final": diagnostico.get("url"),
+            "titulo": diagnostico.get("title"),
+            "torneos_en_listado": len(items),
+            "candidatos_globales": diagnostico.get("candidatos", [])[:20],
+            "texto_pagina": diagnostico.get("body", ""),
+        }
+        # Guarda evidencia de la página para poder ajustar el archivo sin confundir
+        # el carrusel global de partidos en vivo con el listado histórico filtrado.
+        if len(resultado_diag["candidatos_globales"]) or not items:
+            diagnosticos.append(resultado_diag)
+        for item in items:
+            tid = extraer_id_torneo(item.get("href", ""))
+            if not tid:
+                continue
+            encontrados[tid] = {
+                "id": tid, "estado": "finished",
+                "url": f"{BASE}/{tid}",
+                "texto_listado": item.get("text", "")[:500],
+                "clase_tarjeta": item.get("className", ""),
+            }
+        links = await page.eval_on_selector_all(
+            'a[href*="page="]', "(els) => els.map(a => a.href)"
+        )
+        for link in links:
+            if link not in visitadas and link not in pendientes:
+                pendientes.append(link)
+    return {"torneos": list(encontrados.values()), "diagnosticos": diagnosticos}
+
+
+async def ejecutar(inicio: date, fin: date, max_torneos: int, pausa: float) -> dict:
+    db = HistoryDB()
+    # Verifica la conexión real antes de iniciar el rastreo web.
+    # Evita recorrer días/torneos si DATABASE_URL no es accesible desde GitHub Actions.
+    db.initialize()
+    resultado = {
+        "generado": datetime.now(COL).isoformat(timespec="seconds"),
+        "rango_solicitado": {"desde": inicio.isoformat(), "hasta": fin.isoformat()},
+        "torneos": {}, "resumen": {
+            "dias_consultados": 0, "torneos_encontrados": 0, "torneos_fuera_rango": 0,
+            "torneos_guardados": 0, "torneos_con_error": 0,
+            "torneos_sin_fecha_oficial": 0, "grupos_completos": 0,
+            "partidos_reconstruidos": 0, "partidos_esperados": 0,
+            "limite_torneos": max_torneos, "limite_alcanzado": False,
+        },
+    }
+    ids_vistos = set()
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(
+            headless=True, args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"]
+        )
+        page = await browser.new_page()
+        dia = inicio
+        while dia <= fin and len(ids_vistos) < max_torneos:
+            resultado["resumen"]["dias_consultados"] += 1
+            print(
+                f"[backfill] Día {resultado['resumen']['dias_consultados']}: "
+                f"{dia.isoformat()} | torneos identificados hasta ahora: {len(ids_vistos)}",
+                flush=True,
+            )
+            try:
+                descubrimiento = await descubrir_fecha(page, dia)
+                torneos = descubrimiento["torneos"]
+                resultado.setdefault("diagnostico_listados", []).extend(
+                    descubrimiento["diagnosticos"]
+                )
+            except Exception as exc:
+                resultado.setdefault("errores_listado", []).append({
+                    "fecha": dia.isoformat(), "error": f"{type(exc).__name__}: {str(exc)[:200]}"
+                })
+                dia += timedelta(days=1)
+                continue
+            for torneo in torneos:
+                tid = torneo["id"]
+                if tid in ids_vistos or len(ids_vistos) >= max_torneos:
+                    continue
+                ids_vistos.add(tid)
+                resultado["resumen"]["torneos_encontrados"] += 1
+                print(
+                    f"[backfill] Extrayendo torneo {tid} "
+                    f"({resultado['resumen']['torneos_encontrados']}/"
+                    f"{max_torneos})",
+                    flush=True,
+                )
+                try:
+                    dato = None
+                    for intento in range(1, 4):
+                        try:
+                            dato = await extraer(page, torneo)
+                            break
+                        except Exception as exc:
+                            es_timeout = "timeout" in type(exc).__name__.casefold()
+                            if not es_timeout or intento == 3:
+                                raise
+                            espera = 2 ** intento
+                            print(
+                                f"[backfill] Timeout en torneo {tid}; "
+                                f"reintento {intento + 1}/3 en {espera}s",
+                                flush=True,
+                            )
+                            await asyncio.sleep(espera)
+                    dato["estado"] = "finished"
+                    dato["origen_historico"] = "archivo público oficial; ficha del torneo"
+                    dato["fecha_consulta_archivo"] = dia.isoformat()
+                    resultado["torneos"][tid] = dato
+                    if not dato.get("fecha_torneo"):
+                        resultado["resumen"]["torneos_sin_fecha_oficial"] += 1
+                        continue
+                    fecha_oficial = date.fromisoformat(str(dato["fecha_torneo"])[:10])
+                    if not (inicio <= fecha_oficial <= fin):
+                        resultado["resumen"]["torneos_fuera_rango"] += 1
+                        dato["excluido"] = "La fecha oficial de la ficha está fuera del rango solicitado"
+                        continue
+                    counts = db.save_historical_scrape(dato)
+                    resultado["resumen"]["torneos_guardados"] += 1
+                    resultado["resumen"]["grupos_completos"] += dato.get("grupos_completos", 0)
+                    for analisis in dato.get("analisis_cronologico", []):
+                        reconstruccion = analisis.get("reconstruccion") or {}
+                        resultado["resumen"]["partidos_reconstruidos"] += reconstruccion.get("partidos_reconstruidos", 0)
+                        resultado["resumen"]["partidos_esperados"] += reconstruccion.get("partidos_esperados", 0)
+                    dato["persistencia"] = counts
+                except Exception as exc:
+                    resultado["resumen"]["torneos_con_error"] += 1
+                    resultado["torneos"][tid] = {
+                        **torneo, "error": f"{type(exc).__name__}: {str(exc)[:250]}"
+                    }
+                if pausa:
+                    await asyncio.sleep(pausa)
+            dia += timedelta(days=1)
+        if len(ids_vistos) >= max_torneos and dia <= fin:
+            resultado["resumen"]["limite_alcanzado"] = True
+            resultado["rango_procesado_hasta"] = (dia - timedelta(days=1)).isoformat()
+        else:
+            resultado["rango_procesado_hasta"] = fin.isoformat()
+        await browser.close()
+
+    integrar_inteligencia_en_resultado(resultado)
+    if resultado["resumen"]["torneos_encontrados"] == 0:
+        resultado["error_global"] = (
+            "No se detectó ningún torneo en el rango solicitado. "
+            "Se detiene la ejecución para evitar un falso éxito sin datos."
+        )
+    elif resultado["resumen"]["torneos_guardados"] == 0:
+        resultado["error_global"] = (
+            "Se encontraron torneos, pero ninguno pudo guardarse. "
+            "Consulta los errores individuales; si aparece \"Temporary failure in name resolution\", "
+            "DATABASE_URL debe ser la External Database URL de Render para GitHub Actions."
+        )
+    elif resultado["resumen"]["limite_alcanzado"]:
+        resultado["error_global"] = (
+            f"Se alcanzó el límite de {max_torneos} torneos antes de completar el rango. "
+            "Aumenta el límite o divide el backfill en intervalos."
+        )
+    Path(SALIDA).mkdir(parents=True, exist_ok=True)
+    Path(SALIDA, "backfill_historico.json").write_text(
+        json.dumps(resultado, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    if resultado.get("error_global"):
+        raise RuntimeError(resultado["error_global"])
+    return resultado
+
+
+async def main():
+    hoy_praga = datetime.now(PRAGA).date()
+    inicio = fecha_env("HISTORICAL_FROM", restar_meses(hoy_praga, 2))
+    fin = fecha_env("HISTORICAL_TO", hoy_praga - timedelta(days=1))
+    if fin < inicio:
+        raise SystemExit("HISTORICAL_TO debe ser igual o posterior a HISTORICAL_FROM")
+    max_torneos = int(os.getenv("MAX_HISTORICAL_TOURNAMENTS", "5000"))
+    pausa = float(os.getenv("HISTORICAL_PAUSE_SECONDS", "0.25"))
+    resultado = await ejecutar(inicio, fin, max_torneos, pausa)
+    print(json.dumps(resultado["resumen"], ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

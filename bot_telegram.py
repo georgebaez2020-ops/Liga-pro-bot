@@ -1,35 +1,830 @@
+"""Interfaz Telegram del Liga Pro Bot; el scraper corre automáticamente cada 15 min."""
+from __future__ import annotations
+
 import asyncio
 import logging
 import os
+import sys
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
-TOKEN = os.getenv('TELEGRAM_TOKEN')
+from servicio_pronosticos import cargar_estado, listar_calendario
+
+TOKEN = os.getenv("TELEGRAM_TOKEN")
+SCRAPE_INTERVAL = max(60, int(os.getenv("SCRAPE_INTERVAL_SECONDS", "60")))
+_scrape_lock = asyncio.Lock()
+
+
+def _rango_torneo_hoy():
+    """Fechas oficiales de Praga que corresponden al día actual en Colombia."""
+    colombia = ZoneInfo("America/Bogota")
+    praga = ZoneInfo("Europe/Prague")
+    hoy = datetime.now(colombia).date()
+    inicio = datetime.combine(hoy, datetime.min.time(), tzinfo=colombia).astimezone(praga).date()
+    fin = datetime.combine(hoy, datetime.max.time(), tzinfo=colombia).astimezone(praga).date()
+    return inicio.isoformat(), fin.isoformat()
+
+
+def _torneo_es_del_dia_colombia(data, fecha_desde, fecha_hasta):
+    hoy_colombia = datetime.now(ZoneInfo("America/Bogota")).date().isoformat()
+    fechas_partidos = {
+        str(partido.get("fecha_colombia"))
+        for partido in data.get("partidos", [])
+        if partido.get("fecha_colombia")
+    }
+    # Los horarios de partido ya fueron convertidos desde Europe/Prague.
+    # Si existen, son más precisos que la fecha civil publicada del torneo.
+    fecha_oficial = str(data.get("fecha_torneo") or "")
+    # Acepta tanto la fecha de partido en Colombia como la fecha oficial
+    # de Praga que corresponde al rango horario del día colombiano.
+    return (
+        hoy_colombia in fechas_partidos
+        or bool(fecha_oficial and fecha_desde <= fecha_oficial <= fecha_hasta)
+    )
+
+
+def _torneo_tiene_partido_futuro(data):
+    """Comprueba partidos programados posteriores al momento actual de Colombia."""
+    ahora = datetime.now(ZoneInfo("America/Bogota"))
+    for partido in data.get("partidos") or []:
+        if str(partido.get("estado") or "").casefold() not in {"planned", "upcoming"}:
+            continue
+        programado = partido.get("scheduled_at")
+        if programado:
+            try:
+                fecha_hora = datetime.fromisoformat(str(programado))
+                if fecha_hora.tzinfo is None:
+                    fecha_hora = fecha_hora.replace(tzinfo=ZoneInfo("Europe/Prague"))
+                if fecha_hora.astimezone(ZoneInfo("America/Bogota")) > ahora:
+                    return True
+            except ValueError:
+                pass
+        fecha_colombia = partido.get("fecha_colombia")
+        hora_colombia = partido.get("hora_colombia")
+        if fecha_colombia and hora_colombia:
+            try:
+                fecha_hora = datetime.fromisoformat(
+                    f"{fecha_colombia}T{hora_colombia}"
+                ).replace(tzinfo=ZoneInfo("America/Bogota"))
+                if fecha_hora > ahora:
+                    return True
+            except ValueError:
+                pass
+    return False
+
+
+def _torneos_por_estado(tournaments, wanted):
+    fecha_desde, fecha_hasta = _rango_torneo_hoy()
+    rows = []
+    for tid, data in tournaments.items():
+        status = str(data.get("estado") or "unknown").casefold()
+        if status not in wanted:
+            continue
+        # /proximos mira partidos futuros dentro de la ventana de dos días
+        # scrapeada; /vivo y /torneos conservan el filtro del día actual.
+        if wanted == {"upcoming"}:
+            if not _torneo_tiene_partido_futuro(data):
+                continue
+        elif not _torneo_es_del_dia_colombia(data, fecha_desde, fecha_hasta):
+            continue
+
+        # El estado LIVE ya fue reconciliado por el scraper con el listado
+        # oficial. No descartar el torneo si la ficha no expone aún el estado
+        # individual; los conteos de partidos seguirán reflejando solo datos verificados.
+        rows.append((str(tid), data))
+    return rows
+
+
+def _formatear_torneos(tournaments, wanted, heading):
+    rows = _torneos_por_estado(tournaments, wanted)
+    if not rows:
+        return heading + "\\nNo hay torneos en esta categoría en la última actualización."
+
+    # /torneos funciona como índice compacto: solo torneo, estado,
+    # jugadores y ranking. Los detalles siguen en /vivo y /proximos.
+    if wanted == {"live", "upcoming", "finished"}:
+        lines = [heading, f"Total: {len(rows)}"]
+        for tid, data in sorted(
+            rows,
+            key=lambda item: (str(item[1].get("fecha_torneo") or ""), item[0]),
+        ):
+            status = str(data.get("estado") or "unknown").upper()
+            lines.append(f"\\n🏓 #{tid} — {status}")
+            groups = data.get("grupos") or []
+            if not groups:
+                lines.append("Jugadores: aún no publicados.")
+                continue
+            for number, group in enumerate(groups, 1):
+                if len(groups) > 1:
+                    lines.append(f"Grupo {number}:")
+                for player in group:
+                    name = str(player.get("jugador") or "Jugador sin nombre").strip()
+                    rating = player.get("rating")
+                    rating_text = str(rating) if rating not in (None, "") else "Sin ranking"
+                    lines.append(f"• {name} — Ranking: {rating_text}")
+        return "\\n".join(lines)
+
+    lines = [heading, f"Total: {len(rows)}"]
+    for tid, data in sorted(rows, key=lambda item: (str(item[1].get("fecha_torneo") or ""), item[0])):
+        status = str(data.get("estado") or "unknown").upper()
+        date = data.get("fecha_torneo") or "fecha no publicada"
+        lines.append(f"\\n🏓 Torneo #{tid} — {status}\\nFecha: {date}")
+        matches = data.get("partidos") or []
+        live_count = sum(1 for match in matches if match.get("estado") == "live")
+        upcoming_count = sum(1 for match in matches if match.get("estado") in {"planned", "upcoming"})
+        finished_count = sum(1 for match in matches if match.get("estado") == "finished")
+        if status == "LIVE" and live_count == 0:
+            lines.append(
+                "Partidos: estado LIVE confirmado en el listado oficial; "
+                "detalle individual todavía sin confirmar."
+            )
+        else:
+            lines.append(
+                f"Partidos: 🔴 {live_count} en vivo | ⏳ {upcoming_count} pendientes | "
+                f"✅ {finished_count} finalizados"
+            )
+        groups = data.get("grupos") or []
+        analyses = data.get("analisis_cronologico") or []
+        if groups:
+            for number, group in enumerate(groups, 1):
+                lines.append(f"\\n👥 JUGADORES — GRUPO {number}")
+                for player in group:
+                    name = str(player.get("jugador") or "Jugador sin nombre").strip()
+                    rating = player.get("rating") or "Sin ranking"
+                    position = player.get("pos") or "—"
+                    lines.append(f"• {name} | Ranking: {rating} | Posición: {position}")
+                lines.append(f"\\n📊 TABLA — GRUPO {number}")
+                official = _tabla_oficial_grupo_texto(group)
+                if official:
+                    lines.append(official)
+                else:
+                    analysis = next(
+                        (item for item in analyses if str(item.get("grupo")) == str(number)),
+                        None,
+                    )
+                    lines.append(
+                        _tabla_grupo_texto(analysis) if analysis
+                        else "La clasificación todavía no está publicada."
+                    )
+        elif analyses:
+            for analysis in analyses:
+                lines.append(f"\\n📊 TABLA — GRUPO {analysis.get('grupo', '?')}")
+                lines.append(_tabla_grupo_texto(analysis))
+        else:
+            lines.append("\\nLa ficha oficial todavía no publica la lista de jugadores ni la tabla.")
+        lines.append(f"\\nDetalle: /torneo {tid} | Tabla: /tabla {tid}")
+        lines.append(f"Ficha oficial: https://tt.league-pro.com/en/tournaments/{tid}")
+    return "\\n".join(lines)
+
+def _texto_telegram(text, limit=3900):
+    """Mantiene una sola vista editable dentro del límite de Telegram."""
+    text = str(text)
+    if len(text) <= limit:
+        return text
+    suffix = "\n…Contenido recortado por el límite de Telegram. Usa /torneo NUMERO para ver el detalle."
+    return text[:limit - len(suffix)].rsplit("\n", 1)[0] + suffix
+
+
+def _vista_torneos(chat_id, message_id, wanted, heading, text):
+    return {"chat_id": chat_id, "message_id": message_id, "wanted": set(wanted),
+            "heading": heading, "last_text": _texto_telegram(text)}
+
+
+async def _actualizar_vistas_torneos(app):
+    views = app.bot_data.get("vistas_torneos", {})
+    if not views:
+        return
+    try:
+        _, _, tournaments = cargar_estado()
+    except Exception:
+        logging.exception("No se pudieron cargar tablas para actualizar vistas.")
+        return
+    for chat_id, view in list(views.items()):
+        text = _texto_telegram(
+            _formatear_torneos(tournaments, view["wanted"], view["heading"])
+        )
+        if text == view.get("last_text"):
+            continue
+        try:
+            await app.bot.edit_message_text(
+                chat_id=chat_id, message_id=view["message_id"], text=text
+            )
+            view["last_text"] = text
+        except Exception as exc:
+            # Si el usuario borró el mensaje o Telegram ya no permite editarlo,
+            # dejamos de intentar actualizar esa vista.
+            logging.info("Se cierra vista dinámica de %s: %s", chat_id, exc)
+            views.pop(chat_id, None)
+
+async def _actualizar_vistas_detalle(app):
+    """Actualiza cada detalle abierto; conserva vistas ante fallos transitorios."""
+    views = app.bot_data.get("vistas_detalle", {})
+    if not views:
+        return
+    try:
+        _, _, tournaments = cargar_estado()
+    except Exception:
+        logging.exception("No se pudo cargar la memoria para actualizar detalles.")
+        return
+
+    for key, view in list(views.items()):
+        chat_id = view.get("chat_id")
+        if chat_id is None:
+            chat_id = key[0] if isinstance(key, tuple) else key
+        tid = str(view.get("tid") or "")
+        tournament = tournaments.get(tid)
+        if not tournament:
+            logging.debug(
+                "Detalle %s pendiente: no aparece en la última memoria disponible.",
+                tid,
+            )
+            continue
+
+        text = _texto_telegram(_detalle_torneo(tid, tournament))
+        if text == view.get("last_text"):
+            continue
+        try:
+            await app.bot.edit_message_text(
+                chat_id=chat_id, message_id=view["message_id"], text=text
+            )
+            view["last_text"] = text
+            logging.info("Vista de torneo actualizada: chat=%s torneo=%s mensaje=%s",
+                         chat_id, tid, view["message_id"])
+        except Exception as exc:
+            message = str(exc).casefold()
+            if "message is not modified" in message:
+                view["last_text"] = text
+                continue
+            if any(marker in message for marker in (
+                "message to edit not found", "message can't be edited",
+                "chat not found", "bot was blocked by the user",
+            )):
+                logging.warning("Se cierra vista inexistente del torneo %s: %s", tid, exc)
+                views.pop(key, None)
+            else:
+                logging.exception(
+                    "Fallo transitorio al actualizar torneo %s; se conserva la vista.",
+                    tid,
+                )
+
+
+async def _enviar_vista_torneos(update, context, wanted, heading):
+    _, _, tournaments = cargar_estado()
+    text = _formatear_torneos(tournaments, wanted, heading)
+    text = _texto_telegram(text)
+    message = await update.effective_message.reply_text(text)
+    views = context.application.bot_data.setdefault("vistas_torneos", {})
+    views[update.effective_chat.id] = _vista_torneos(
+        update.effective_chat.id, message.message_id, wanted, heading, text
+    )
+
+
+
+
+def _chunks(text, limit=3900):
+    text = str(text)
+    return [text[i:i + limit] for i in range(0, len(text), limit)] or ["Sin datos disponibles."]
+
+
+async def _reply(update, text):
+    for chunk in _chunks(text):
+        await update.effective_message.reply_text(chunk)
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text('Bot Liga Pro prendido. Escribe /test')
+    await _reply(update,
+        "🏓 Liga Pro Bot conectado.\n\n"
+        "Comandos:\n"
+        "/estado — estado de la memoria y torneos\n"
+        "/calendario — partidos programados y en vivo\n"
+        "/torneos — torneos en vivo y próximos\n"
+        "/vivo — torneos que están en directo\n"
+        "/proximos — torneos próximos\n"
+        "/torneo NUMERO — partidos y desarrollo de un torneo\n"
+        "/tabla NUMERO — clasificación por grupos del torneo\n"
+        "/test — comprobar conexión")
 
 
 async def test(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text('Conexion OK.')
+    await _reply(update, "Conexión Telegram OK. 🟢")
+
+
+async def estado(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        db, snapshots, tournaments = cargar_estado()
+        counts = {"live": 0, "upcoming": 0, "finished": 0, "unknown": 0}
+        for tournament in tournaments.values():
+            key = str(tournament.get("estado") or "unknown").casefold()
+            counts[key] = counts.get(key, 0) + 1
+        await _reply(update,
+            f"📊 MEMORIA LIGA PRO\nTorneos: {len(tournaments)}\n"
+            f"Snapshots: {len(snapshots)}\n"
+            f"En vivo: {counts.get('live', 0)} | Programados: {counts.get('upcoming', 0)} | "
+            f"Finalizados: {counts.get('finished', 0)}\n"
+            f"Base de datos: {db.kind}")
+    except Exception as exc:
+        logging.exception("Error en /estado")
+        await _reply(update, f"No pude leer la memoria: {type(exc).__name__}: {exc}")
+
+
+async def calendario(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        _, _, tournaments = cargar_estado()
+        games = listar_calendario(tournaments)
+        if not games:
+            await _reply(update, "No hay partidos programados o en vivo guardados. El scraper actualizará los datos automáticamente.")
+            return
+        lines = ["🗓️ CALENDARIO OFICIAL"]
+        for game in games[:35]:
+            a, b = game.get("jugador_a", "?"), game.get("jugador_b", "?")
+            hora_co = game.get("hora_colombia") or "—"
+            hora_pr = game.get("hora_praga") or game.get("hora") or "—"
+            lines.append(f"• {game.get('estado','?').upper()} | {a} vs {b} | Grupo {game.get('grupo') or '—'} | Colombia {hora_co} | Praga {hora_pr}")
+        await _reply(update, "\n".join(lines))
+    except Exception as exc:
+        logging.exception("Error en /calendario")
+        await _reply(update, f"Error consultando calendario: {type(exc).__name__}: {exc}")
+
+
+async def torneos(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        await _enviar_vista_torneos(update, context, {"live", "upcoming", "finished"}, "🏓 TODOS LOS TORNEOS DEL DÍA")
+    except Exception as exc:
+        logging.exception("Error consultando torneos")
+        await _reply(update, f"Error consultando torneos: {type(exc).__name__}: {exc}")
+
+
+async def vivo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        await _enviar_vista_torneos(update, context, {"live"}, "🔴 TORNEOS EN VIVO")
+    except Exception as exc:
+        logging.exception("Error consultando vivo")
+        await _reply(update, f"Error consultando torneos: {type(exc).__name__}: {exc}")
+
+
+async def proximos(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        await _enviar_vista_torneos(update, context, {"upcoming"}, "🗓️ PRÓXIMOS TORNEOS")
+    except Exception as exc:
+        logging.exception("Error consultando proximos")
+        await _reply(update, f"Error consultando torneos: {type(exc).__name__}: {exc}")
+
+
+async def finalizados(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        await _enviar_vista_torneos(
+            update, context, {"finished"}, "✅ TORNEOS FINALIZADOS"
+        )
+    except Exception as exc:
+        logging.exception("Error consultando finalizados")
+        await _reply(update, f"Error consultando torneos: {type(exc).__name__}: {exc}")
+
+
+def _tabla_grupo_texto(analisis):
+    reconstruction = analisis.get("reconstruccion") or {}
+    sequence = reconstruction.get("secuencia") or []
+    table = sequence[-1].get("tabla_despues") if sequence else reconstruction.get("tabla_final_reconstruida")
+    if not table:
+        return "Tabla todavía sin resultados finalizados."
+    lines = ["Pos | Jugador | PJ | G | P | Pts"]
+    for position, row in enumerate(table, 1):
+        played = int(row.get("victorias", 0)) + int(row.get("derrotas", 0))
+        lines.append(
+            f"{position}. {row.get('jugador', '?')} | {played} | "
+            f"{row.get('victorias', 0)} | {row.get('derrotas', 0)} | {row.get('puntos', 0)}"
+        )
+    if reconstruction.get("empates_finales_no_resueltos"):
+        lines.append("⚠️ Hay empates que requieren criterios oficiales adicionales.")
+    return "\n".join(lines)
+
+
+def _detalle_torneo(tid, tournament):
+    """Muestra primero la tabla oficial y después los partidos del torneo."""
+    status = str(tournament.get("estado") or "unknown").upper()
+    lines = [
+        f"🏓 TORNEO #{tid} — {status}",
+        f"Fecha: {tournament.get('fecha_torneo') or 'no publicada'}",
+        f"Ficha oficial: https://tt.league-pro.com/en/tournaments/{tid}",
+        "",
+        "📊 TABLA DE POSICIONES",
+    ]
+
+    groups = tournament.get("grupos") or []
+    analyses = tournament.get("analisis_cronologico") or []
+    rating_by_name = {}
+    for analysis in analyses:
+        rating_by_name.update(analysis.get("rating_por_jugador") or {})
+
+    if groups:
+        for number, group in enumerate(groups, 1):
+            lines.append(f"\n👥 GRUPO {number}")
+            lines.append("Pos | Jugador | Ranking | Resultados")
+            for player in group:
+                name = str(player.get("jugador") or "Jugador sin nombre").strip()
+                rating = player.get("rating") or rating_by_name.get(name, {}).get("rating_final") or "—"
+                position = player.get("pos") or "—"
+                results = player.get("resultados") or []
+                result_text = " ".join(str(value) for value in results) if results else "—"
+                lines.append(f"{position} | {name} | {rating} | {result_text}")
+            lines.append("Sets | Balls | Pts | Puesto")
+            for player in group:
+                name = str(player.get("jugador") or "Jugador sin nombre").strip()
+                lines.append(
+                    f"{name}: {player.get('sets') or '—'} | "
+                    f"{player.get('balls') or '—'} | {player.get('points') or '—'} | "
+                    f"{player.get('place') or '—'}"
+                )
+    elif analyses:
+        for analysis in analyses:
+            lines.append(f"\n📋 GRUPO {analysis.get('grupo', '?')}")
+            lines.append(_tabla_grupo_texto(analysis))
+    else:
+        lines.append("La ficha oficial todavía no publica la tabla de posiciones.")
+
+    matches = tournament.get("partidos") or []
+    lines.extend(["", "🏓 JUEGOS DEL TORNEO"])
+    if not matches:
+        lines.append("La ficha oficial todavía no publica partidos.")
+        return "\n".join(lines)
+
+    # Mantener el orden oficial de la ficha y mostrar cada encuentro como tarjeta.
+    for match in matches:
+        state = str(match.get("estado") or "unknown").casefold()
+        state_label = {
+            "live": "🔴 EN VIVO",
+            "finished": "✅ FINALIZADO",
+            "planned": "⏳ PROGRAMADO",
+            "upcoming": "⏳ PRÓXIMO",
+        }.get(state, state.upper())
+        hour = match.get("hora_colombia") or match.get("hora") or "Hora —"
+        group_label = f" | Grupo {match.get('grupo')}" if match.get("grupo") else ""
+        lines.append(f"\n{state_label} · {hour}{group_label}")
+
+        name_a = str(match.get("jugador_a") or "?")
+        name_b = str(match.get("jugador_b") or "?")
+        rating_a = match.get("rating_a") or rating_by_name.get(name_a, {}).get("rating_final")
+        rating_b = match.get("rating_b") or rating_by_name.get(name_b, {}).get("rating_final")
+        player_a = f"({rating_a}) {name_a}" if rating_a not in (None, "") else name_a
+        player_b = f"({rating_b}) {name_b}" if rating_b not in (None, "") else name_b
+
+        if state == "finished":
+            score = match.get("marcador_sets") or "—"
+            lines.append(f"{player_a}  {score}  {player_b}")
+            points_a = match.get("puntos_sets_a") or []
+            points_b = match.get("puntos_sets_b") or []
+            if points_a and points_b and len(points_a) == len(points_b):
+                lines.append("Sets: " + " · ".join(
+                    f"{a}-{b}" for a, b in zip(points_a, points_b)
+                ))
+            else:
+                lines.append("Marcador por sets: no publicado completo.")
+        elif state == "live":
+            score = match.get("marcador_live_sets")
+            lines.append(f"{player_a}  {score or 'EN JUEGO'}  {player_b}")
+            live_tokens = match.get("marcador_live_tokens") or []
+            if live_tokens:
+                # Se conserva la secuencia literal oficial; no se atribuye cada cifra
+                # a un set cuando la ficha no permite identificarla sin ambigüedad.
+                lines.append("Marcador parcial oficial: " + " · ".join(map(str, live_tokens)))
+            else:
+                lines.append("La ficha todavía no publica el parcial.")
+        else:
+            lines.append(f"{player_a} vs {player_b}")
+    return "\n".join(lines)
+
+async def torneo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await _reply(update, "Uso: /torneo NUMERO\nEjemplo: /torneo 38185")
+        return
+    tid = context.args[0].strip().rstrip("/").split("/")[-1]
+    if not tid.isdigit():
+        await _reply(update, "El identificador debe ser numérico. Ejemplo: /torneo 38185")
+        return
+    try:
+        _, _, tournaments = cargar_estado()
+        tournament = tournaments.get(tid)
+        if not tournament:
+            await _reply(update, f"No encuentro el torneo #{tid} en la última extracción. Revisa /vivo o /proximos y vuelve a intentarlo.")
+            return
+        text = _texto_telegram(_detalle_torneo(tid, tournament))
+        message = await update.effective_message.reply_text(text)
+        views = context.application.bot_data.setdefault("vistas_detalle", {})
+        views[(update.effective_chat.id, tid)] = {
+            "chat_id": update.effective_chat.id,
+            "tid": tid,
+            "message_id": message.message_id,
+            "last_text": text,
+        }
+    except Exception as exc:
+        logging.exception("Error consultando detalle del torneo %s", tid)
+        await _reply(update, f"Error consultando torneo: {type(exc).__name__}: {exc}")
+
+
+def _tabla_oficial_grupo_texto(grupo):
+    """Formatea la tabla publicada en las filas oficiales de jugadores."""
+    if not grupo:
+        return None
+    lines = ["Pos | Jugador | Resultados | Sets | Balls | Pts | Puesto"]
+    count = 0
+    for player in grupo:
+        name = str(player.get("jugador") or "").strip()
+        if not name:
+            continue
+        results = player.get("resultados") or []
+        result_text = " ".join(str(value) for value in results) if results else "—"
+        values = [
+            player.get("pos") or "—", name, result_text,
+            player.get("sets") or "—", player.get("balls") or "—",
+            player.get("points") or "—", player.get("place") or "—",
+        ]
+        lines.append(" | ".join(str(value) for value in values))
+        count += 1
+    return "\n".join(lines) if count else None
+
+
+async def tabla(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Muestra exclusivamente la clasificación por grupos de un torneo."""
+    if not context.args:
+        await _reply(
+            update,
+            "Uso: /tabla NUMERO\nEjemplo: /tabla 38185\n"
+            "Puedes copiar el número desde /vivo o /proximos."
+        )
+        return
+
+    tid = context.args[0].strip().rstrip("/").split("/")[-1]
+    if not tid.isdigit():
+        await _reply(update, "El identificador debe ser numérico. Ejemplo: /tabla 38185")
+        return
+
+    try:
+        _, _, tournaments = cargar_estado()
+        tournament = tournaments.get(tid)
+        if not tournament:
+            await _reply(
+                update,
+                f"No encuentro el torneo #{tid} en la última extracción. "
+                "Consulta /vivo o /proximos para obtener un identificador vigente."
+            )
+            return
+
+        lines = [
+            f"📊 TABLAS DEL TORNEO #{tid}",
+            f"Estado: {str(tournament.get('estado') or 'unknown').upper()}",
+            f"Fecha: {tournament.get('fecha_torneo') or 'no publicada'}",
+            f"Ficha oficial: https://tt.league-pro.com/en/tournaments/{tid}",
+        ]
+        groups = tournament.get("grupos") or []
+        analyses = tournament.get("analisis_cronologico") or []
+        if groups:
+            for number, group in enumerate(groups, 1):
+                lines.append(f"\n📋 GRUPO {number} — TABLA OFICIAL")
+                official_table = _tabla_oficial_grupo_texto(group)
+                if official_table:
+                    lines.append(official_table)
+                else:
+                    analysis = next(
+                        (item for item in analyses if str(item.get("grupo")) == str(number)),
+                        None,
+                    )
+                    lines.append(
+                        _tabla_grupo_texto(analysis) if analysis
+                        else "La ficha no publica todavía resultados de este grupo."
+                    )
+        elif analyses:
+            for analysis in analyses:
+                lines.append(f"\n📋 GRUPO {analysis.get('grupo', '?')}")
+                lines.append(_tabla_grupo_texto(analysis))
+        else:
+            lines.append(
+                "\nLa ficha oficial todavía no publica grupos ni una tabla de clasificación. "
+                "En los torneos próximos puede que la clasificación aún no esté disponible."
+            )
+
+        lines.append(
+            "\nNota: la clasificación se reconstruye con partidos finalizados; "
+            "los encuentros LIVE o pendientes no suman puntos."
+        )
+        await _reply(update, "\n".join(lines))
+    except Exception as exc:
+        logging.exception("Error consultando tabla del torneo %s", tid)
+        await _reply(update, f"Error consultando tabla: {type(exc).__name__}: {exc}")
+
+
+async def pronosticos(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        result = analizar_calendario()
+        lines = [
+            "🧠 ANÁLISIS DE PRÓXIMOS PARTIDOS",
+            f"Partidos programados: {result['partidos_programados_analizados']}",
+            f"Pronósticos elegibles registrados: {result['pronosticos_registrados']}",
+            f"Resultados liquidados ahora: {result['liquidacion']['liquidados']}",
+        ]
+        for item in result["partidos"][:25]:
+            game, forecast = item["partido"], item["pronostico"]
+            pair = f"{game.get('jugador_a','?')} vs {game.get('jugador_b','?')}"
+            if forecast.get("elegible"):
+                lines.append(f"✅ {pair}: {forecast['favorito']} ({forecast['probabilidad_a']}% / {forecast['probabilidad_b']}%). Confianza {forecast['nivel_confianza']}.")
+            else:
+                lines.append(f"⏸️ {pair}: sin pronóstico — {forecast.get('motivo','no elegible')}.")
+            if forecast.get("elegible"):
+                lines.append(
+                    f"   Forma últimos 10: {forecast.get('jugador_a')} "
+                    f"{forecast.get('forma_ultimos_10_a', {}).get('victorias', 0)}/"
+                    f"{forecast.get('forma_ultimos_10_a', {}).get('partidos', 0)} — "
+                    f"{forecast.get('jugador_b')} "
+                    f"{forecast.get('forma_ultimos_10_b', {}).get('victorias', 0)}/"
+                    f"{forecast.get('forma_ultimos_10_b', {}).get('partidos', 0)}"
+                )
+            context = item.get("contexto") or {}
+            for player, detail in context.get("necesidad_actual", {}).items():
+                lines.append(f"   Necesidad actual {player}: {detail.get('necesidad_fase_final', 'sin dato')}.")
+            for player, detail in context.get("respuesta_historica_necesidad", {}).items():
+                sample = detail.get("partidos_obligado_a_ganar", 0)
+                if sample:
+                    lines.append(f"   Historial obligado {player}: {detail.get('victorias_obligado', 0)}V/{detail.get('derrotas_obligado', 0)}D en {sample} partidos.")
+            for player, detail in context.get("rendimiento_relevante", {}).items():
+                sample = detail.get("partidos_relevantes", 0)
+                if sample:
+                    lines.append(f"   Partidos relevantes {player}: {detail.get('victorias', 0)}V/{detail.get('derrotas', 0)}D en {sample} partidos.")
+        lines.append("\nEl bot se abstiene si falta histórico suficiente o una fecha/hora verificable.")
+        await _reply(update, "\n".join(lines))
+    except Exception as exc:
+        logging.exception("Error en /pronosticos")
+        await _reply(update, f"Error calculando pronósticos: {type(exc).__name__}: {exc}")
+
+
+async def jugador(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    name = " ".join(context.args).strip()
+    if not name:
+        await _reply(update, "Uso: /jugador Nombre Apellido")
+        return
+    try:
+        rows = buscar_jugador(name)
+        if not rows:
+            await _reply(update, f"No encuentro histórico para «{name}».")
+            return
+        lines = ["📈 HISTÓRICO DE JUGADOR"]
+        for p in rows:
+            g = p["global"]
+            lines.append(
+                f"{p['jugador']}\nPartidos: {g['partidos']} | Victorias: {g['victorias']} | "
+                f"Derrotas: {g['derrotas']} | Efectividad: {g['porcentaje_victorias']}%\n"
+                f"Últimos 10: {p['ventanas']['10']['victorias']}V / {p['ventanas']['10']['derrotas']}D\n"
+                f"Últimos 30: {p['ventanas']['30']['victorias']}V / {p['ventanas']['30']['derrotas']}D"
+            )
+        await _reply(update, "\n\n".join(lines))
+    except Exception as exc:
+        logging.exception("Error en /jugador")
+        await _reply(update, f"Error consultando jugador: {type(exc).__name__}: {exc}")
+
+
+
+async def necesidad(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    name = " ".join(context.args).strip()
+    if not name:
+        await _reply(update, "Uso: /necesidad Nombre del jugador")
+        return
+    try:
+        rows = buscar_necesidad(name)
+        if not rows:
+            await _reply(update, f"No hay datos de necesidad competitiva para «{name}».")
+            return
+        lines = ["🧭 RADAR DE NECESIDAD COMPETITIVA"]
+        for row in rows:
+            lines.append(
+                f"{row['jugador']}\nPartidos con necesidad: {row['partidos_con_necesidad']} | "
+                f"Obligado a ganar: {row['partidos_obligado_a_ganar']}\n"
+                f"Victorias obligado: {row['victorias_obligado']} | "
+                f"Derrotas: {row['derrotas_obligado']}\n"
+                f"Respuesta: {row['respuesta_cuando_obligado']} | "
+                f"Muestra suficiente: {'sí' if row['muestra_suficiente'] else 'no'}\n"
+                f"{row['interpretacion']}"
+            )
+        await _reply(update, "\n\n".join(lines))
+    except Exception as exc:
+        logging.exception("Error en /necesidad")
+        await _reply(update, f"Error consultando radar: {type(exc).__name__}: {exc}")
+
+
+async def rendimiento(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    name = " ".join(context.args).strip()
+    if not name:
+        await _reply(update, "Uso: /rendimiento Nombre del jugador")
+        return
+    try:
+        rows = buscar_rendimiento(name)
+        if not rows:
+            await _reply(update, f"No hay partidos competitivamente relevantes registrados para «{name}».")
+            return
+        lines = ["🔥 RENDIMIENTO EN CONTEXTOS COMPETITIVOS"]
+        for row in rows:
+            lines.append(
+                f"{row['jugador']}\nPartidos relevantes: {row['partidos_relevantes']} | "
+                f"Victorias: {row['victorias']} | Derrotas: {row['derrotas']}\n"
+                f"Tasa de victoria: {row['tasa_victoria']} | "
+                f"Torneos con muestra: {row['torneos_con_muestra']}\n"
+                f"{row['interpretacion']}"
+            )
+        await _reply(update, "\n\n".join(lines))
+    except Exception as exc:
+        logging.exception("Error en /rendimiento")
+        await _reply(update, f"Error consultando rendimiento: {type(exc).__name__}: {exc}")
+
+async def h2h(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    raw = " ".join(context.args)
+    parts = [x.strip() for x in raw.split("|", 1)]
+    if len(parts) != 2 or not all(parts):
+        await _reply(update, "Uso: /h2h Jugador 1 | Jugador 2")
+        return
+    try:
+        row = buscar_h2h(parts[0], parts[1])
+        if not row:
+            await _reply(update, "No hay enfrentamientos directos completos registrados entre esos jugadores.")
+            return
+        await _reply(update,
+            f"⚔️ H2H: {row['jugador_a']} vs {row['jugador_b']}\n"
+            f"Partidos: {row['partidos']}\n"
+            f"Victorias: {row['jugador_a']} {row['victorias_a']} — "
+            f"{row['jugador_b']} {row['victorias_b']}")
+    except Exception as exc:
+        logging.exception("Error en /h2h")
+        await _reply(update, f"Error consultando H2H: {type(exc).__name__}: {exc}")
+
+
+async def evaluacion(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        from retroalimentacion import PredictionFeedback
+        from db import HistoryDB
+        metrics = PredictionFeedback(HistoryDB()).metrics()
+        if metrics.get("muestra", 0) == 0:
+            await _reply(update, "Todavía no hay pronósticos liquidados. El bot necesita registrar pronósticos previos y observar sus resultados oficiales.")
+            return
+        await _reply(update,
+            f"🎯 EVALUACIÓN DEL MODELO\nMuestra: {metrics['muestra']}\n"
+            f"Accuracy: {metrics['accuracy']:.1%}\nBrier: {metrics['brier']}\n"
+            f"Log loss: {metrics['log_loss']}\nEstado: {metrics['estado']}")
+    except Exception as exc:
+        logging.exception("Error en /evaluacion")
+        await _reply(update, f"Error consultando evaluación: {type(exc).__name__}: {exc}")
+
+
+async def scrape_job(context: ContextTypes.DEFAULT_TYPE):
+    if _scrape_lock.locked():
+        logging.info("Se omite ciclo: ya hay una extracción en curso.")
+        return
+    async with _scrape_lock:
+        logging.info("Iniciando actualización automática de Czech Liga Pro.")
+        try:
+            process = await asyncio.create_subprocess_exec(
+                sys.executable, "tablas_scraper.py",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+            )
+            output, _ = await asyncio.wait_for(process.communicate(), timeout=840)
+            tail = output.decode("utf-8", errors="replace")[-6000:]
+            if process.returncode:
+                logging.error("Scraper terminó con código %s:\n%s", process.returncode, tail)
+            else:
+                logging.info("Scraper actualizado correctamente:\n%s", tail)
+                await _actualizar_vistas_torneos(context.application)
+                await _actualizar_vistas_detalle(context.application)
+                # En esta fase solo actualizamos UPCOMING, LIVE y FINISHED.
+                # El análisis predictivo se mantiene fuera del ciclo para reducir RAM.
+        except asyncio.TimeoutError:
+            logging.exception("Tiempo agotado en scraper.")
+        except Exception:
+            logging.exception("No se pudo ejecutar el scraper.")
 
 
 def main():
-    logging.basicConfig(level=logging.INFO)
-    # Evita que los Logs de Render muestren el token dentro de las direcciones
-    logging.getLogger('httpx').setLevel(logging.WARNING)
+    logging.basicConfig(
+        level=os.getenv("LOG_LEVEL", "INFO").upper(),
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     if not TOKEN:
-        print('FALTA TELEGRAM_TOKEN en Render (Environment)')
-        return
-    asyncio.set_event_loop(asyncio.new_event_loop())
+        raise RuntimeError("Falta TELEGRAM_TOKEN en las variables de entorno.")
     app = Application.builder().token(TOKEN).build()
-    app.add_handler(CommandHandler('start', start))
-    app.add_handler(CommandHandler('test', test))
-    print('Bot iniciado...')
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("test", test))
+    app.add_handler(CommandHandler("estado", estado))
+    app.add_handler(CommandHandler("calendario", calendario))
+    app.add_handler(CommandHandler("torneos", torneos))
+    app.add_handler(CommandHandler("vivo", vivo))
+    app.add_handler(CommandHandler("proximos", proximos))
+    app.add_handler(CommandHandler("finalizados", finalizados))
+    app.add_handler(CommandHandler("torneo", torneo))
+    app.add_handler(CommandHandler("tabla", tabla))
+    if app.job_queue is None:
+        raise RuntimeError("Instala python-telegram-bot[job-queue] para activar las actualizaciones.")
+    app.job_queue.run_repeating(scrape_job, interval=SCRAPE_INTERVAL, first=10, name="scrape-czech-liga-pro")
+    logging.info("Liga Pro Bot listo; actualización cada %s segundos.", SCRAPE_INTERVAL)
     app.run_polling(drop_pending_updates=True)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

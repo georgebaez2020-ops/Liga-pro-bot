@@ -218,6 +218,20 @@ class HistoryDB:
         return counts
 
 
+    def save_historical_scrape(self, tournament: dict[str, Any]) -> dict[str, int]:
+        """Guarda una ficha histórica con timestamp estable: repetir el backfill no duplica snapshots."""
+        official_date = str(tournament.get("fecha_torneo") or "").strip()
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", official_date):
+            raise ValueError("La ficha no contiene una fecha oficial YYYY-MM-DD")
+        parsed = datetime.fromisoformat(official_date).replace(tzinfo=timezone.utc)
+        stable_data = {
+            "generado": parsed.isoformat(timespec="seconds"),
+            "dia_colombia": official_date,
+            "torneos": {str(tournament.get("id")): tournament},
+        }
+        return self.save_scrape(stable_data)
+
+
 def save_scrape_file(path: str = "salida/tablas.json") -> dict[str, int]:
     with open(path, encoding="utf-8") as source:
         data = json.load(source)

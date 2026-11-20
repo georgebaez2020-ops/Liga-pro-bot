@@ -17,6 +17,19 @@ def _score(value):
     return (a, b) if a != b else None
 
 
+def parsear_marcador_sets_live(texto):
+    """Devuelve un marcador parcial de sets solo si hay una única pareja inequívoca."""
+    import re
+    encontrados = {
+        (int(a), int(b))
+        for a, b in re.findall(r"(?m)^\s*([0-3])\s*:\s*([0-3])\s*$", str(texto or ""))
+    }
+    if len(encontrados) != 1:
+        return None
+    a, b = encontrados.pop()
+    return f"{a}:{b}"
+
+
 def _best_place(points, pending, player):
     names = list(points)
     best = len(names)
@@ -238,11 +251,71 @@ def reconstruir_secuencia(jugadores, partidos, rating_torneo=None):
         "clasificacion_desempates_completa": bool(sequence) and not sequence[-1]["empates_no_resueltos"],
     }
 
+def _normalizar_tokens_nombre(nombre):
+    """Normaliza nombres completos y abreviaturas, conservando marcas jr./sr."""
+    import re
+    tokens = re.findall(r"[a-z0-9]+(?:-[a-z0-9]+)?", str(nombre or "").casefold())
+    aliases = {"jr": "junior", "sr": "senior"}
+    return [aliases.get(token.rstrip("."), token) for token in tokens]
+
+
+def _nombre_ficha_coincide(nombre_ficha, nombre_completo):
+    """Compara tokens abreviados; admite segundos nombres omitidos y marcas J-r."""
+    abreviados = _normalizar_tokens_nombre(nombre_ficha)
+    completos = _normalizar_tokens_nombre(nombre_completo)
+    if not abreviados or len(abreviados) > len(completos):
+        return False
+    for abreviado, completo in zip(abreviados, completos):
+        if "-" in abreviado:
+            partes = abreviado.split("-", 1)
+            if len(partes[0]) == 1 and len(partes[1]) == 1:
+                if not (completo.startswith(partes[0]) and completo.endswith(partes[1])):
+                    return False
+            elif not completo.startswith(abreviado):
+                return False
+        elif not completo.startswith(abreviado):
+            return False
+    return True
+
+
+def _resolver_jugador_por_rating_y_nombre(rating, nombre_ficha, ratings):
+    """Resuelve ratings repetidos usando las abreviaturas de la tarjeta oficial.
+
+    Admite nombres con segundos apellidos/nombres omitidos y sufijos jr./sr.
+    Las coincidencias ambiguas se dejan sin resolver: nunca se elige al azar.
+    """
+    candidatos = ratings.get(str(rating), [])
+    coincidentes = [
+        candidato for candidato in candidatos
+        if _nombre_ficha_coincide(nombre_ficha, candidato)
+    ]
+    if len(coincidentes) == 1:
+        return coincidentes[0]
+    # Conserva compatibilidad con fichas donde el rating ya es único.
+    if len(candidatos) == 1:
+        return candidatos[0]
+    return None
+
+
 def parsear_detalle_oficial(texto, grupo):
     """Lee tarjetas de partido multilínea del texto visible de la ficha oficial."""
     import re
 
     lines = [line.strip() for line in str(texto or "").replace("\u00a0", " ").splitlines() if line.strip()]
+    # Fecha oficial publicada en la sección Group (ej. 17 Nov 2026).
+    fecha_torneo = None
+    meses = {"jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
+             "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12}
+    for line in lines:
+        mfecha = re.fullmatch(r"(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{4})", line)
+        if mfecha and mfecha.group(2)[:3].lower() in meses:
+            from datetime import date
+            try:
+                fecha_torneo = date(int(mfecha.group(3)), meses[mfecha.group(2)[:3].lower()],
+                                    int(mfecha.group(1))).isoformat()
+                break
+            except ValueError:
+                pass
     ratings = {}
     for player in grupo:
         name = str(player.get("jugador") or "").strip()
@@ -298,7 +371,7 @@ def parsear_detalle_oficial(texto, grupo):
     try:
         start = next(i for i, line in enumerate(lines) if line.casefold() == "tournament games") + 1
     except StopIteration:
-        return {"partidos": [], "rating_por_jugador": rating_data,
+        return {"partidos": [], "fecha_torneo": fecha_torneo, "rating_por_jugador": rating_data,
                 "advertencias": [{"motivo": "no se encontró la sección Tournament games"}],
                 "fuente": "texto visible de la ficha oficial"}
 
@@ -306,7 +379,15 @@ def parsear_detalle_oficial(texto, grupo):
     stage = "group"
     i = start
     while i < len(lines):
-        marker = lines[i].casefold()
+        marker_raw = lines[i].casefold().strip()
+        # La web puede entregar el texto traducido por el navegador o en español.
+        status_aliases = {
+            "finished": "finished", "finalizado": "finished", "finalizada": "finished",
+            "live": "live", "en vivo": "live", "en directo": "live",
+            "planned": "planned", "planificado": "planned", "planificada": "planned",
+            "upcoming": "upcoming", "próximamente": "upcoming", "proximamente": "upcoming",
+        }
+        marker = status_aliases.get(marker_raw, marker_raw)
         if marker == "for 3rd place":
             stage = "third_place"
             i += 1
@@ -336,9 +417,17 @@ def parsear_detalle_oficial(texto, grupo):
             warnings.append({"hora": hour, "motivo": "no se encontraron los ratings de ambos jugadores"})
             i = j + 1
             continue
-        a_list, b_list = ratings.get(r1.group(1), []), ratings.get(r2.group(1), [])
-        if len(a_list) != 1 or len(b_list) != 1 or a_list[0] == b_list[0]:
-            warnings.append({"hora": hour, "motivo": "rating no identifica jugadores de forma única"})
+        jugador_a = _resolver_jugador_por_rating_y_nombre(r1.group(1), name1, ratings)
+        jugador_b = _resolver_jugador_por_rating_y_nombre(r2.group(1), name2, ratings)
+        if not jugador_a or not jugador_b or jugador_a == jugador_b:
+            warnings.append({
+                "hora": hour,
+                "motivo": "rating y nombre abreviado no identifican jugadores de forma única",
+                "rating_a": r1.group(1), "nombre_a": name1,
+                "candidatos_a": ratings.get(r1.group(1), []),
+                "rating_b": r2.group(1), "nombre_b": name2,
+                "candidatos_b": ratings.get(r2.group(1), []),
+            })
             i = j + 4
             continue
         score = None
@@ -349,10 +438,20 @@ def parsear_detalle_oficial(texto, grupo):
             # sets ganados A, puntos de cada set A, sets ganados B,
             # puntos de cada set B.
             nums = []
+            markers = []
             k = j + 4
-            while k < len(lines) and len(nums) < 12 and re.fullmatch(r"\d+", lines[k]):
-                nums.append(int(lines[k]))
-                k += 1
+            # Algunas tarjetas oficiales insertan una marca literal "T" entre
+            # los dos números del marcador (p. ej. "T 3 0" o "0 T 3").
+            # Se conserva la marca sin atribuirle un significado no documentado.
+            while k < len(lines) and len(nums) < 12:
+                if re.fullmatch(r"\d+", lines[k]):
+                    nums.append(int(lines[k]))
+                    k += 1
+                elif lines[k].casefold() == "t":
+                    markers.append(lines[k])
+                    k += 1
+                else:
+                    break
             parsed = False
             if nums and 0 <= nums[0] <= 3:
                 sets_a = nums[0]
@@ -365,34 +464,69 @@ def parsear_detalle_oficial(texto, grupo):
                         if all(0 <= x <= 30 for x in candidate_a + candidate_b):
                             puntos_sets_a, puntos_sets_b = candidate_a, candidate_b
                             score = f"{sets_a}:{sets_b}"
-                            next_i = j + 4 + needed
+                            next_i = k
                             parsed = True
                             break
             if not parsed:
-                # Compatibilidad con páginas/fixtures antiguos que solo muestran
-                # el total de sets y no los puntos individuales.
-                if j + 5 < len(lines) and re.fullmatch(r"\d+", lines[j + 4]) and re.fullmatch(r"\d+", lines[j + 5]):
-                    score = f"{lines[j + 4]}:{lines[j + 5]}"
-                    next_i = j + 6
+                # Compatibilidad con tarjetas que solo muestran el total de sets,
+                # incluyendo las que insertan una marca literal "T" entre cifras.
+                if len(nums) == 2 and (nums[0] == 3 or nums[1] == 3):
+                    score = f"{nums[0]}:{nums[1]}"
+                    next_i = k
                 else:
                     warnings.append({"hora": hour, "motivo": "partido marcado FINISHED sin marcador completo"})
-        elif status == "live":
-            # Un marcador parcial en vivo no se registra como resultado final.
-            pass
+        marcador_live_tokens = []
+        marcador_live_texto = None
+        if status == "live":
+            # Conserva los números visibles del marcador en vivo, pero no los
+            # interpreta como sets ganados ni los incorpora a la reconstrucción.
+            # El formato de la tarjeta LIVE puede variar; por eso se expone la
+            # secuencia literal y no se inventa qué cifra corresponde a cada set.
+            k = j + 4
+            while k < len(lines) and len(marcador_live_tokens) < 8:
+                token = lines[k].strip()
+                if re.fullmatch(r"\d{1,2}", token) or re.fullmatch(r"\d{1,2}\s*[:\-]\s*\d{1,2}", token):
+                    marcador_live_tokens.append(token)
+                    k += 1
+                elif token.casefold() == "t":
+                    marcador_live_tokens.append(token.upper())
+                    k += 1
+                else:
+                    break
+            if marcador_live_tokens:
+                marcador_live_texto = " ".join(marcador_live_tokens)
+                # En la ficha oficial del torneo, LIVE muestra los sets ganados
+                # como dos celdas numéricas independientes (p. ej. "1" y "0").
+                # Solo se acepta exactamente esa pareja y dentro del formato
+                # al mejor de cinco; secuencias más largas pueden ser puntos
+                # del set y se conservan como texto sin interpretarlas.
+                if (
+                    len(marcador_live_tokens) == 2
+                    and all(re.fullmatch(r"[0-3]", token) for token in marcador_live_tokens)
+                ):
+                    marcador_live_sets = f"{marcador_live_tokens[0]}:{marcador_live_tokens[1]}"
+                else:
+                    marcador_live_sets = None
+                next_i = k
+            else:
+                marcador_live_sets = None
         matches.append({
             "orden": len(matches) + 1, "hora": hour, "estado": status,
-            "jugador_a": a_list[0], "jugador_b": b_list[0],
+            "jugador_a": jugador_a, "jugador_b": jugador_b,
             "nombre_a_en_ficha": name1, "nombre_b_en_ficha": name2,
-            "marcador_sets": score, "puntos_sets_a": puntos_sets_a,
-            "puntos_sets_b": puntos_sets_b,
+            "marcador_sets": score, "marcador_marca": " ".join(markers) if status == "finished" and markers else None,
+            "marcador_live_tokens": marcador_live_tokens,
+            "marcador_live_texto": marcador_live_texto,
+            "marcador_live_sets": marcador_live_sets if status == "live" else None,
+            "puntos_sets_a": puntos_sets_a, "puntos_sets_b": puntos_sets_b,
             "puntos_juego_a": sum(puntos_sets_a) if puntos_sets_a else None,
             "puntos_juego_b": sum(puntos_sets_b) if puntos_sets_b else None,
             "fase": stage,
         })
         i = next_i
     return {
-        "partidos": matches, "rating_por_jugador": rating_data,
-        "advertencias": warnings,
+        "partidos": matches, "fecha_torneo": fecha_torneo, "rating_por_jugador": rating_data,
+        "advertencias": warnings + ([] if fecha_torneo else [{"motivo": "no se encontró fecha oficial del torneo"}]),
         "fuente": "texto visible de la ficha oficial; emparejamiento por rating",
     }
 
