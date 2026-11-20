@@ -402,75 +402,98 @@ def _tabla_grupo_texto(analisis):
 
 
 def _detalle_torneo(tid, tournament):
+    """Muestra primero la tabla oficial y después los partidos del torneo."""
     status = str(tournament.get("estado") or "unknown").upper()
     lines = [
         f"🏓 TORNEO #{tid} — {status}",
         f"Fecha: {tournament.get('fecha_torneo') or 'no publicada'}",
         f"Ficha oficial: https://tt.league-pro.com/en/tournaments/{tid}",
+        "",
+        "📊 TABLA DE POSICIONES",
     ]
-    matches = tournament.get("partidos") or []
-    live = [m for m in matches if m.get("estado") == "live"]
-    upcoming = [m for m in matches if m.get("estado") in {"planned", "upcoming"}]
-    finished = [m for m in matches if m.get("estado") == "finished"]
-    lines.append(
-        f"\n📊 PARTIDOS: 🔴 {len(live)} en vivo | ⏳ {len(upcoming)} pendientes | "
-        f"✅ {len(finished)} finalizados"
-    )
-    if live:
-        lines.append("\n🔴 PARTIDOS EN VIVO")
-        for match in live:
-            parcial = match.get("marcador_live_sets")
-            detalle_parcial = (
-                f" | sets: {parcial}"
-                if parcial is not None else " | marcador parcial no disponible en la ficha"
-            )
-            lines.append(
-                f"• {match.get('jugador_a', '?')} vs {match.get('jugador_b', '?')} "
-                f"| Grupo {match.get('grupo') or '—'}{detalle_parcial}"
-            )
-    if upcoming:
-        lines.append("\n⏳ PRÓXIMOS PARTIDOS")
-        for match in upcoming[:20]:
-            lines.append(
-                f"• {match.get('hora_colombia') or match.get('hora') or 'Hora —'} | "
-                f"{match.get('jugador_a', '?')} vs {match.get('jugador_b', '?')} "
-                f"| Grupo {match.get('grupo') or '—'}"
-            )
-    if finished:
-        lines.append("\n✅ ÚLTIMOS RESULTADOS")
-        for match in finished[-20:]:
-            lines.append(
-                f"• {match.get('jugador_a', '?')} {match.get('marcador_sets') or '?'} "
-                f"{match.get('jugador_b', '?')} | Grupo {match.get('grupo') or '—'}"
-            )
-    analyses = tournament.get("analisis_cronologico") or []
+
     groups = tournament.get("grupos") or []
+    analyses = tournament.get("analisis_cronologico") or []
+    rating_by_name = {}
+    for analysis in analyses:
+        rating_by_name.update(analysis.get("rating_por_jugador") or {})
+
     if groups:
         for number, group in enumerate(groups, 1):
-            lines.append(f"\n📋 TABLA OFICIAL — GRUPO {number}")
-            official = _tabla_oficial_grupo_texto(group)
-            if official:
-                lines.append(official)
-            else:
-                analysis = next(
-                    (item for item in analyses if str(item.get("grupo")) == str(number)),
-                    None,
-                )
+            lines.append(f"\n👥 GRUPO {number}")
+            lines.append("Pos | Jugador | Ranking | Resultados")
+            for player in group:
+                name = str(player.get("jugador") or "Jugador sin nombre").strip()
+                rating = player.get("rating") or rating_by_name.get(name, {}).get("rating_final") or "—"
+                position = player.get("pos") or "—"
+                results = player.get("resultados") or []
+                result_text = " ".join(str(value) for value in results) if results else "—"
+                lines.append(f"{position} | {name} | {rating} | {result_text}")
+            lines.append("Sets | Balls | Pts | Puesto")
+            for player in group:
+                name = str(player.get("jugador") or "Jugador sin nombre").strip()
                 lines.append(
-                    _tabla_grupo_texto(analysis) if analysis
-                    else "La ficha oficial todavía no publica resultados para esta tabla."
+                    f"{name}: {player.get('sets') or '—'} | "
+                    f"{player.get('balls') or '—'} | {player.get('points') or '—'} | "
+                    f"{player.get('place') or '—'}"
                 )
     elif analyses:
         for analysis in analyses:
-            number = analysis.get("grupo", "?")
-            lines.append(f"\n📋 TABLA RECONSTRUIDA — GRUPO {number}")
+            lines.append(f"\n📋 GRUPO {analysis.get('grupo', '?')}")
             lines.append(_tabla_grupo_texto(analysis))
     else:
-        lines.append("\nLa ficha oficial todavía no publica grupos ni una tabla de clasificación.")
-    if not matches and not tournament.get("grupos"):
-        lines.append("\nLa ficha todavía no publica partidos ni grupos.")
-    return "\n".join(lines)
+        lines.append("La ficha oficial todavía no publica la tabla de posiciones.")
 
+    matches = tournament.get("partidos") or []
+    lines.extend(["", "🏓 JUEGOS DEL TORNEO"])
+    if not matches:
+        lines.append("La ficha oficial todavía no publica partidos.")
+        return "\n".join(lines)
+
+    # Mantener el orden oficial de la ficha y mostrar cada encuentro como tarjeta.
+    for match in matches:
+        state = str(match.get("estado") or "unknown").casefold()
+        state_label = {
+            "live": "🔴 EN VIVO",
+            "finished": "✅ FINALIZADO",
+            "planned": "⏳ PROGRAMADO",
+            "upcoming": "⏳ PRÓXIMO",
+        }.get(state, state.upper())
+        hour = match.get("hora_colombia") or match.get("hora") or "Hora —"
+        group_label = f" | Grupo {match.get('grupo')}" if match.get("grupo") else ""
+        lines.append(f"\n{state_label} · {hour}{group_label}")
+
+        name_a = str(match.get("jugador_a") or "?")
+        name_b = str(match.get("jugador_b") or "?")
+        rating_a = match.get("rating_a") or rating_by_name.get(name_a, {}).get("rating_final")
+        rating_b = match.get("rating_b") or rating_by_name.get(name_b, {}).get("rating_final")
+        player_a = f"({rating_a}) {name_a}" if rating_a not in (None, "") else name_a
+        player_b = f"({rating_b}) {name_b}" if rating_b not in (None, "") else name_b
+
+        if state == "finished":
+            score = match.get("marcador_sets") or "—"
+            lines.append(f"{player_a}  {score}  {player_b}")
+            points_a = match.get("puntos_sets_a") or []
+            points_b = match.get("puntos_sets_b") or []
+            if points_a and points_b and len(points_a) == len(points_b):
+                lines.append("Sets: " + " · ".join(
+                    f"{a}-{b}" for a, b in zip(points_a, points_b)
+                ))
+            else:
+                lines.append("Marcador por sets: no publicado completo.")
+        elif state == "live":
+            score = match.get("marcador_live_sets")
+            lines.append(f"{player_a}  {score or 'EN JUEGO'}  {player_b}")
+            live_tokens = match.get("marcador_live_tokens") or []
+            if live_tokens:
+                # Se conserva la secuencia literal oficial; no se atribuye cada cifra
+                # a un set cuando la ficha no permite identificarla sin ambigüedad.
+                lines.append("Marcador parcial oficial: " + " · ".join(map(str, live_tokens)))
+            else:
+                lines.append("La ficha todavía no publica el parcial.")
+        else:
+            lines.append(f"{player_a} vs {player_b}")
+    return "\n".join(lines)
 
 async def torneo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
