@@ -101,12 +101,37 @@ def _torneos_por_estado(tournaments, wanted):
 def _formatear_torneos(tournaments, wanted, heading):
     rows = _torneos_por_estado(tournaments, wanted)
     if not rows:
-        return heading + "\nNo hay torneos en esta categoría en la última actualización."
+        return heading + "\\nNo hay torneos en esta categoría en la última actualización."
+
+    # /torneos funciona como índice compacto: solo torneo, estado,
+    # jugadores y ranking. Los detalles siguen en /vivo y /proximos.
+    if wanted == {"live", "upcoming", "finished"}:
+        lines = [heading, f"Total: {len(rows)}"]
+        for tid, data in sorted(
+            rows,
+            key=lambda item: (str(item[1].get("fecha_torneo") or ""), item[0]),
+        ):
+            status = str(data.get("estado") or "unknown").upper()
+            lines.append(f"\\n🏓 #{tid} — {status}")
+            groups = data.get("grupos") or []
+            if not groups:
+                lines.append("Jugadores: aún no publicados.")
+                continue
+            for number, group in enumerate(groups, 1):
+                if len(groups) > 1:
+                    lines.append(f"Grupo {number}:")
+                for player in group:
+                    name = str(player.get("jugador") or "Jugador sin nombre").strip()
+                    rating = player.get("rating")
+                    rating_text = str(rating) if rating not in (None, "") else "Sin ranking"
+                    lines.append(f"• {name} — Ranking: {rating_text}")
+        return "\\n".join(lines)
+
     lines = [heading, f"Total: {len(rows)}"]
     for tid, data in sorted(rows, key=lambda item: (str(item[1].get("fecha_torneo") or ""), item[0])):
         status = str(data.get("estado") or "unknown").upper()
         date = data.get("fecha_torneo") or "fecha no publicada"
-        lines.append(f"\n🏓 Torneo #{tid} — {status}\nFecha: {date}")
+        lines.append(f"\\n🏓 Torneo #{tid} — {status}\\nFecha: {date}")
         matches = data.get("partidos") or []
         live_count = sum(1 for match in matches if match.get("estado") == "live")
         upcoming_count = sum(1 for match in matches if match.get("estado") in {"planned", "upcoming"})
@@ -125,13 +150,13 @@ def _formatear_torneos(tournaments, wanted, heading):
         analyses = data.get("analisis_cronologico") or []
         if groups:
             for number, group in enumerate(groups, 1):
-                lines.append(f"\n👥 JUGADORES — GRUPO {number}")
+                lines.append(f"\\n👥 JUGADORES — GRUPO {number}")
                 for player in group:
                     name = str(player.get("jugador") or "Jugador sin nombre").strip()
                     rating = player.get("rating") or "Sin ranking"
                     position = player.get("pos") or "—"
                     lines.append(f"• {name} | Ranking: {rating} | Posición: {position}")
-                lines.append(f"\n📊 TABLA — GRUPO {number}")
+                lines.append(f"\\n📊 TABLA — GRUPO {number}")
                 official = _tabla_oficial_grupo_texto(group)
                 if official:
                     lines.append(official)
@@ -146,14 +171,13 @@ def _formatear_torneos(tournaments, wanted, heading):
                     )
         elif analyses:
             for analysis in analyses:
-                lines.append(f"\n📊 TABLA — GRUPO {analysis.get('grupo', '?')}")
+                lines.append(f"\\n📊 TABLA — GRUPO {analysis.get('grupo', '?')}")
                 lines.append(_tabla_grupo_texto(analysis))
         else:
-            lines.append("\nLa ficha oficial todavía no publica la lista de jugadores ni la tabla.")
-        lines.append(f"\nDetalle: /torneo {tid} | Tabla: /tabla {tid}")
+            lines.append("\\nLa ficha oficial todavía no publica la lista de jugadores ni la tabla.")
+        lines.append(f"\\nDetalle: /torneo {tid} | Tabla: /tabla {tid}")
         lines.append(f"Ficha oficial: https://tt.league-pro.com/en/tournaments/{tid}")
-    return "\n".join(lines)
-
+    return "\\n".join(lines)
 
 def _texto_telegram(text, limit=3900):
     """Mantiene una sola vista editable dentro del límite de Telegram."""
