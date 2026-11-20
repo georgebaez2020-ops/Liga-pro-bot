@@ -46,6 +46,36 @@ def _torneo_es_del_dia_colombia(data, fecha_desde, fecha_hasta):
     )
 
 
+def _torneo_tiene_partido_futuro(data):
+    """Comprueba partidos programados posteriores al momento actual de Colombia."""
+    ahora = datetime.now(ZoneInfo("America/Bogota"))
+    for partido in data.get("partidos") or []:
+        if str(partido.get("estado") or "").casefold() not in {"planned", "upcoming"}:
+            continue
+        programado = partido.get("scheduled_at")
+        if programado:
+            try:
+                fecha_hora = datetime.fromisoformat(str(programado))
+                if fecha_hora.tzinfo is None:
+                    fecha_hora = fecha_hora.replace(tzinfo=ZoneInfo("Europe/Prague"))
+                if fecha_hora.astimezone(ZoneInfo("America/Bogota")) > ahora:
+                    return True
+            except ValueError:
+                pass
+        fecha_colombia = partido.get("fecha_colombia")
+        hora_colombia = partido.get("hora_colombia")
+        if fecha_colombia and hora_colombia:
+            try:
+                fecha_hora = datetime.fromisoformat(
+                    f"{fecha_colombia}T{hora_colombia}"
+                ).replace(tzinfo=ZoneInfo("America/Bogota"))
+                if fecha_hora > ahora:
+                    return True
+            except ValueError:
+                pass
+    return False
+
+
 def _torneos_por_estado(tournaments, wanted):
     fecha_desde, fecha_hasta = _rango_torneo_hoy()
     rows = []
@@ -53,7 +83,12 @@ def _torneos_por_estado(tournaments, wanted):
         status = str(data.get("estado") or "unknown").casefold()
         if status not in wanted:
             continue
-        if not _torneo_es_del_dia_colombia(data, fecha_desde, fecha_hasta):
+        # /proximos mira partidos futuros dentro de la ventana de dos días
+        # scrapeada; /vivo y /torneos conservan el filtro del día actual.
+        if wanted == {"upcoming"}:
+            if not _torneo_tiene_partido_futuro(data):
+                continue
+        elif not _torneo_es_del_dia_colombia(data, fecha_desde, fecha_hasta):
             continue
 
         # Regla de seguridad para /vivo: no confiar solo en la etiqueta
