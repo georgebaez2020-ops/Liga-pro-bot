@@ -4,7 +4,7 @@ import gc
 import json
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from urllib.parse import parse_qs, urlencode, urljoin, urlsplit, urlunsplit
 from zoneinfo import ZoneInfo
 
@@ -266,7 +266,7 @@ async def descubrir(page, dia_col, estados_solicitados):
                 pendientes.append(siguiente)
 
     os.makedirs(SALIDA, exist_ok=True)
-    with open(f"{SALIDA}/debug_listado.json", "w", encoding="utf-8") as debug_file:
+    with open(f"{SALIDA}/debug_listado_{dia_col}.json", "w", encoding="utf-8") as debug_file:
         json.dump(filas_diagnostico, debug_file, ensure_ascii=False, indent=2)
     return list(encontrados.values())
 
@@ -402,6 +402,7 @@ async def main():
         "generado": datetime.now(COL).isoformat(timespec="seconds"),
         "zona_horaria": "America/Bogota",
         "dia_colombia": dia,
+        "dias_colombia_consultados": [],
         "filtro_estados": sorted(estados),
         "torneos": {},
         "resumen": {"live": 0, "upcoming": 0, "finished": 0, "unknown": 0},
@@ -428,9 +429,33 @@ async def main():
                  "texto_listado": "TORNEOS configurado manualmente"}
                 for tid in torneos_manual
             ]
+            dias_consultados = [dia]
         else:
-            lista = await descubrir(page, dia, estados)
-            print(f"Torneos identificados en el listado: {len(lista)}")
+            # Además del día actual, consulta el siguiente día colombiano para
+            # que /proximos no quede vacío al terminar la jornada de hoy.
+            incluir_siguiente = os.getenv("INCLUIR_DIA_SIGUIENTE", "1").strip().lower() not in {"0", "false", "no"}
+            dias_consultados = [dia]
+            if incluir_siguiente:
+                siguiente_dia = (
+                    datetime.strptime(dia, "%Y-%m-%d").date() + timedelta(days=1)
+                ).isoformat()
+                dias_consultados.append(siguiente_dia)
+
+            por_id = {}
+            for dia_consulta in dias_consultados:
+                lista_dia = await descubrir(page, dia_consulta, estados)
+                print(
+                    f"Torneos identificados para {dia_consulta}: {len(lista_dia)}"
+                )
+                for torneo_encontrado in lista_dia:
+                    tid_encontrado = str(torneo_encontrado["id"])
+                    anterior = por_id.get(tid_encontrado)
+                    prioridad = {"live": 0, "upcoming": 1, "unknown": 2, "finished": 3}
+                    if anterior is None or prioridad.get(torneo_encontrado.get("estado"), 2) < prioridad.get(anterior.get("estado"), 2):
+                        por_id[tid_encontrado] = torneo_encontrado
+            lista = list(por_id.values())
+
+        resultado["dias_colombia_consultados"] = dias_consultados
 
         # Procesar primero torneos activos o próximos para que el límite de
         # memoria no deje fuera los eventos de mayor interés operativo.
@@ -467,28 +492,26 @@ async def main():
                         f"estado según partidos={estado_calendario}. Se guarda {estado_calendario}."
                     )
                 fecha_oficial = dato.get("fecha_torneo")
-                fecha_desde, fecha_hasta = rango_fechas_praga(dia)
+                rangos_praga = [rango_fechas_praga(dia_consulta) for dia_consulta in dias_consultados]
                 fechas_partidos_col = {
                     str(p.get("fecha_colombia"))
                     for p in dato.get("partidos", [])
                     if p.get("fecha_colombia")
                 }
-                # Si la ficha publica horas, decide por el día real del partido
-                # en Colombia, no por la fecha civil de Praga.
-                # Un torneo pertenece al día consultado si coincide su fecha
-                # oficial de Praga dentro del rango que cubre el día colombiano,
-                # O si alguno de sus partidos cae en el día colombiano solicitado.
-                # No descartamos el torneo solo porque la conversión horaria mueva
-                # un partido a la víspera en Colombia.
-                corresponde_hoy = (
-                    dia in fechas_partidos_col
-                    or bool(fecha_oficial and fecha_desde <= fecha_oficial <= fecha_hasta)
+                # Acepta partidos de cualquiera de los días consultados,
+                # usando sus fechas colombianas o el rango oficial de Praga.
+                corresponde_periodo = (
+                    bool(set(dias_consultados).intersection(fechas_partidos_col))
+                    or any(
+                        fecha_oficial and fecha_desde <= fecha_oficial <= fecha_hasta
+                        for fecha_desde, fecha_hasta in rangos_praga
+                    )
                 )
-                if not corresponde_hoy:
+                if not corresponde_periodo:
                     print(
                         f"Torneo {tid} descartado: fecha oficial {fecha_oficial or 'no publicada'}; "
                         f"fechas de partidos en Colombia {sorted(fechas_partidos_col)}; "
-                        f"día solicitado {dia}."
+                        f"días consultados {dias_consultados}."
                     )
                     continue
                 resultado["torneos"][tid] = dato
