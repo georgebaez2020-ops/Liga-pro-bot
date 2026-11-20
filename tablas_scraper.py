@@ -355,12 +355,13 @@ async def extraer(page, torneo):
 
 def clasificar_estado_partidos(partidos, estado_listado="unknown"):
     """
-    Interpreta el estado operativo desde los partidos de la ficha oficial.
+    Reconcilia el estado de la ficha con el estado visible en el listado oficial.
 
-    La etiqueta del listado solo sirve para descubrir el torneo: nunca puede
-    convertir por sí sola un torneo en LIVE. Para declarar LIVE debe existir
-    al menos un partido cuyo marcador/estado oficial sea LIVE.
+    Un LIVE del listado prevalece cuando la ficha no ofrece una señal concluyente
+    de que todos los partidos terminaron. Los estados individuales se conservan
+    para marcadores y conteos; no se inventan partidos LIVE.
     """
+    estado_listado = str(estado_listado or "unknown").strip().casefold()
     estados = {
         str(partido.get("estado") or "").strip().casefold()
         for partido in (partidos or [])
@@ -368,13 +369,14 @@ def clasificar_estado_partidos(partidos, estado_listado="unknown"):
     }
     if "live" in estados:
         return "live"
-    if estados.intersection({"planned", "upcoming"}):
-        return "upcoming"
     if estados and estados.issubset({"finished"}):
         return "finished"
-
-    # Si la ficha no permitió leer estados de partidos, no inventar uno
-    # heredándolo de una etiqueta posiblemente vieja del listado.
+    if estado_listado == "live":
+        # El listado oficial confirma que el torneo está activo, aunque la
+        # ficha individual aún no haya expuesto el estado de sus encuentros.
+        return "live"
+    if estados.intersection({"planned", "upcoming"}):
+        return "upcoming"
     return "unknown"
 
 
@@ -485,6 +487,7 @@ async def main():
                 estado_calendario = clasificar_estado_partidos(
                     dato.get("partidos", []), estado_oficial
                 )
+                dato["estado_listado"] = estado_oficial
                 dato["estado"] = estado_calendario
                 if estado_calendario != estado_oficial:
                     print(
